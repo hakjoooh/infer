@@ -437,6 +437,20 @@ module PulseTransferFunctions = struct
 
 
   let pp_session_name _node fmt = F.pp_print_string fmt "Pulse"
+
+  (** score function for AbductiveDomain.t *)
+  let score' _ a =
+    (* meaning less code *)
+    let a' = Stack.remove_vars [] a in
+    if phys_equal a a' then Random.float 100.0 else Random.float 10.0
+
+  (** score function for ExecutionDomain.t *)
+  let score (vs: float list) (a: Domain.t) =
+    (* meaning less code *)
+    match a with
+    | ContinueProgram astate ->
+       score' vs astate
+    | _ -> 1.0
 end
 
 module DisjunctiveAnalyzer =
@@ -446,6 +460,11 @@ module DisjunctiveAnalyzer =
       let join_policy = `UnderApproximateAfter Config.pulse_max_disjuncts
 
       let widen_policy = `UnderApproximateAfterNumIterations Config.pulse_widen_threshold
+
+      let ml_policy = 
+        match Config.pulse_ml_parameters with
+        | Some(x) -> `MLParameters (Some x)
+        | None -> `MLParameters None
     end)
 
 let with_debug_exit_node proc_desc ~f =

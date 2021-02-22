@@ -559,7 +559,6 @@ let remove_vars vars location orig_astate =
     let+ () = check_memory_leak_unreachable unreachable_addrs location orig_astate in
     astate
 
-
 let is_ptr_to_const formal_typ_opt =
   Option.value_map formal_typ_opt ~default:false ~f:(fun (formal_typ : Typ.t) ->
       match formal_typ.desc with Typ.Tptr (t, _) -> Typ.is_const t.quals | _ -> false )

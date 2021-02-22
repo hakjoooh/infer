@@ -125,7 +125,7 @@ struct
           |> not )
 
 
-    let join : t -> t -> t =
+    let orig_join : t -> t -> t =
       let rec list_rev_append l1 l2 n =
         match l1 with hd :: tl when n > 0 -> list_rev_append tl (hd :: l2) (n - 1) | _ -> l2
       in
@@ -135,6 +135,83 @@ struct
           let (`UnderApproximateAfter n) = DConfig.join_policy in
           let lhs_length = List.length lhs in
           if lhs_length >= n then lhs else list_rev_append rhs lhs (n - lhs_length)
+
+
+    let top_k_join vectors : t -> t -> t =
+      (** TODO: naive top-k selecting algorithm. we should revise it later. ***)
+      let rec logr list score =
+        match list, score with
+        | ([], _) | (_, []) -> ()
+        | (x::xs, y::ys) ->
+           (* log *)
+           L.d_printfln "state: (%f)@\n%a" y T.Domain.pp x;
+           logr xs ys
+      in
+      let log list score =
+        L.d_printfln "* Score table";
+        logr list score
+      in
+      (* let selected_log list =
+       *   L.d_printfln "* Selected";
+       *   List.iter ~f:(fun x -> L.d_printfln "state: @\n%a" T.Domain.pp x) list;
+       *   list
+       * in *)
+      let log_param list =
+        L.d_printfln "* join parameters";
+        List.iter ~f:(fun x -> L.d_printfln "%f" x) list
+      in
+      let rec partition fn l1 l2 =
+        match (l1, l2) with
+        | ([], _) | (_, []) -> ([], [], [], [])
+        | (hd::tl, hd2::tl2) ->
+           let a1, a2, b1, b2 = partition fn tl tl2 in
+           if fn hd2 then (hd::a1, a2, hd2::b1, b2)
+           else (a1, hd::a2, b1, hd2::b2)
+      in
+      let rec qsort l1 l2 =
+        match (l1, l2) with
+        | ([], _) | (_, []) -> []
+        | (hd::tl, hd2::tl2) ->
+           (* select a head element as a pivot, which is bad. *)
+           let x = hd2 in 
+           let s1, l1, s2, l2 = partition (fun (y: float) -> Float.compare x y < 0) tl tl2 in
+           let a1 = qsort s1 s2 in
+           let b1 = qsort l1 l2 in
+           a1 @ (hd::b1)
+      in
+      let rec select list k =
+        if k <= 0 then []
+        else 
+          match list with
+          | [] -> []
+          | hd::tl -> hd::(select tl (k - 1))
+      in
+      let select_top_k list scores k =
+          log list scores;
+          let sorted = qsort list scores in
+          (* selected_log *)
+            (select sorted k)
+      in
+      (** until here ***)
+      let score = T.score vectors in
+      let (`UnderApproximateAfter n) = DConfig.join_policy in
+      fun lhs rhs ->
+      if phys_equal lhs rhs then lhs
+      else
+        let list = lhs @ rhs in
+        let len = List.length list in
+        if len < n then list
+        else 
+          let scores_list = List.map ~f:score list in
+          log_param vectors;
+          select_top_k list scores_list n
+
+
+    let join : t -> t -> t =
+      let (`MLParameters ml_policy) = DConfig.ml_policy in
+      match ml_policy with
+      | Some(vectors) -> top_k_join vectors
+      | None -> orig_join
 
 
     (** check if elements of [disj] appear in [of_] in the same order, using pointer equality on

@@ -37,6 +37,8 @@ module type DisjunctiveConfig = sig
   val join_policy : [`UnderApproximateAfter of int]
 
   val widen_policy : [`UnderApproximateAfterNumIterations of int]
+
+  val ml_policy : [`MLParameters of float list option]
 end
 
 module type DisjReady = sig
@@ -49,4 +51,6 @@ module type DisjReady = sig
   val exec_instr : Domain.t -> analysis_data -> CFG.Node.t -> Sil.instr -> Domain.t list
 
   val pp_session_name : CFG.Node.t -> Format.formatter -> unit
+
+  val score: float list -> Domain.t -> float
 end
