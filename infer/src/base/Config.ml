@@ -3176,7 +3176,11 @@ and pulse_nullsafe_report_npe = !pulse_nullsafe_report_npe
 
 and pulse_ml_parameters =
   match !pulse_ml_parameters with
-  | Some(xs) -> Some(List.map ~f:Float.of_string (String.split xs ~on:','))
+  | Some(xs) ->
+     String.split xs ~on:','
+     |> List.map ~f:(String.filter ~f:(fun c -> not (Char.equal c ' ')))
+     |> List.map ~f:Float.of_string
+     |> Option.some
   | None -> None
 
 and pure_by_default = !pure_by_default
