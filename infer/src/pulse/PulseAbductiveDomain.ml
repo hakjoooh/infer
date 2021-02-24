@@ -445,6 +445,8 @@ module Memory = struct
 
 
   let find_opt address astate = BaseMemory.find_opt address (astate.post :> base_domain).heap
+
+  let cardinal astate = BaseMemory.cardinal (astate.post :> base_domain).heap
 end
 
 let add_edge_on_src src location stack =

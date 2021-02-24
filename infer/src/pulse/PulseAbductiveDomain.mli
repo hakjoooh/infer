@@ -130,6 +130,8 @@ module Memory : sig
   val find_opt : AbstractValue.t -> t -> BaseMemory.Edges.t option
 
   val find_edge_opt : AbstractValue.t -> Access.t -> t -> (AbstractValue.t * ValueHistory.t) option
+
+  val cardinal: t -> int
 end
 
 (** attribute operations like {!BaseAddressAttributes} but that also take care of propagating facts

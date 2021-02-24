@@ -439,18 +439,28 @@ module PulseTransferFunctions = struct
   let pp_session_name _node fmt = F.pp_print_string fmt "Pulse"
 
   (** score function for AbductiveDomain.t *)
-  let score' _ a =
-    (* meaning less code *)
-    let a' = Stack.remove_vars [] a in
-    if phys_equal a a' then Random.float 100.0 else Random.float 10.0
+  let score' a =
+    let c = AbductiveDomain.Memory.cardinal a in
+    [float_of_int c]
 
   (** score function for ExecutionDomain.t *)
+  let rec compute vs1 vs2 acc =
+    match vs1, vs2 with
+    | [], _ | _, [] -> 0.
+    | x::xs, y::ys ->
+       let acc = acc +. x *. y in
+       compute xs ys acc
+                    
   let score (vs: float list) (a: Domain.t) =
-    (* meaning less code *)
-    match a with
-    | ContinueProgram astate ->
-       score' vs astate
-    | _ -> 1.0
+    let vectors = 
+      match a with
+      | ContinueProgram astate -> 0.::score' astate
+      | ExitProgram _ -> 1.::[0.]
+      | AbortProgram _ -> 2.::[0.]
+      | LatentAbortProgram _ -> 3.::[0.]
+      | ISLLatentMemoryError _ -> 4.::[0.]
+    in
+    compute vs vectors 0.
 end
 
 module DisjunctiveAnalyzer =
