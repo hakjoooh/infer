@@ -447,7 +447,7 @@ module PulseTransferFunctions = struct
   let rec compute vs1 vs2 acc =
     match vs1, vs2 with
     | [], _ | _, [] ->
-       L.debug Analysis Quiet "A vector size doesn't match with the number of features.";
+       L.debug Analysis Quiet "A vector size doesn't match with the number of features.@\n";
        0.
     | x::xs, y::ys ->
        let acc = acc +. x *. y in
