@@ -438,11 +438,6 @@ module PulseTransferFunctions = struct
 
   let pp_session_name _node fmt = F.pp_print_string fmt "Pulse"
 
-  (** score function for AbductiveDomain.t *)
-  let score' a =
-    let c = AbductiveDomain.Memory.cardinal a in
-    [float_of_int c]
-
   (** score function for ExecutionDomain.t *)
   let rec compute vs1 vs2 acc =
     match vs1, vs2 with
@@ -454,15 +449,47 @@ module PulseTransferFunctions = struct
        let acc = acc +. x *. y in
        compute xs ys acc
                     
+  (** feature vectors *)
+  let isContinue astate =
+    match astate with
+    | ContinueProgram _ -> 1.
+    | _ -> 0.
+  let isExit astate =
+    match astate with
+    | ExitProgram _ -> 1.
+    | _ -> 0.
+  let isAbort astate =
+    match astate with
+    | AbortProgram _ -> 1.
+    | _ -> 0.
+  let isLatent astate =
+    match astate with
+    | LatentAbortProgram _ -> 1.
+    | _ -> 0.
+  let isError astate =
+    match astate with
+    | ISLLatentMemoryError _ -> 1.
+    | _ -> 0.
+  let memory_cardinal a =
+    let c = AbductiveDomain.Memory.cardinal a in
+    float_of_int c
+    
   let score (vs: float list) (a: Domain.t) =
-    let vectors = 
+    let v1 = isContinue a in
+    let v2 = isExit a in
+    let v3 = isAbort a in
+    let v4 = isLatent a in
+    let v5 = isError a in
+    let v6 = 
       match a with
-      | ContinueProgram astate -> 0.::score' astate
-      | ExitProgram _ -> 1.::[0.]
-      | AbortProgram _ -> 2.::[0.]
-      | LatentAbortProgram _ -> 3.::[0.]
-      | ISLLatentMemoryError _ -> 4.::[0.]
+      | ContinueProgram astate
+      | ISLLatentMemoryError astate -> memory_cardinal astate
+      | ExitProgram astate
+      | AbortProgram astate
+      | LatentAbortProgram {astate}
+        -> memory_cardinal (astate :> AbductiveDomain.t)
     in
+    let vectors = [v1; v2; v3; v4; v5; v6] in
     compute vs vectors 0.
 end
 
