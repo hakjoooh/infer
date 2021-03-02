@@ -769,6 +769,35 @@ let incorporate_new_eqs astate (phi, new_eqs) =
   if PathCondition.is_unsat_cheap phi then phi
   else match incorporate_new_eqs astate new_eqs with Unsat -> PathCondition.false_ | Sat () -> phi
 
+let diff_stack_vars astate =
+  let prevars = BaseStack.cardinal (astate.pre :> base_domain).stack in
+  let postvars = BaseStack.cardinal (astate.post :> base_domain).stack in
+  prevars - postvars
+
+let skipped_calls astate = SkippedCalls.cardinal astate.skipped_calls
+
+(*
+    | AddressOfCppTemporary of Var.t * ValueHistory.t
+    | AddressOfStackVariable of Var.t * Location.t * ValueHistory.t
+    | Allocated of Procname.t * Trace.t
+    | Closure of Procname.t
+    | DynamicType of Typ.Name.t
+    | EndOfCollection
+    | Invalid of Invalidation.t * Trace.t
+    | ISLAbduced of Trace.t
+    | MustBeInitialized of Trace.t
+    | MustBeValid of Trace.t
+    | StdVectorReserve
+    | Uninitialized
+    | WrittenTo of Trace.t
+ *)
+let num_of_invalids_post astate =
+  BaseAddressAttributes.fold (fun _ attrs i ->
+      if Attributes.get_invalid attrs
+         |> Option.is_some
+      then i + 1
+      else i)
+    (astate.post :> BaseDomain.t).attrs 0
 
 module Topl = struct
   let small_step loc event astate =

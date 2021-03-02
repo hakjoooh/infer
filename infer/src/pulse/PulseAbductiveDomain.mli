@@ -87,6 +87,12 @@ val get_pre : t -> BaseDomain.t
 
 val get_post : t -> BaseDomain.t
 
+val diff_stack_vars : t -> int
+
+val skipped_calls : t -> int
+
+val num_of_invalids_post : t -> int
+  
 (** stack operations like {!BaseStack} but that also take care of propagating facts to the
     precondition *)
 module Stack : sig

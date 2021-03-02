@@ -470,26 +470,35 @@ module PulseTransferFunctions = struct
     match astate with
     | ISLLatentMemoryError _ -> 1.
     | _ -> 0.
-  let memory_cardinal a =
-    let c = AbductiveDomain.Memory.cardinal a in
-    float_of_int c
-    
+  let memory_cardinal astate =
+    float_of_int (AbductiveDomain.Memory.cardinal astate)
+  let var_diff astate =
+    float_of_int (AbductiveDomain.diff_stack_vars astate)
+  let skipped_calls astate =
+    float_of_int (AbductiveDomain.skipped_calls astate)
+  let invalids astate =
+    float_of_int (AbductiveDomain.num_of_invalids_post astate)
+
   let score (vs: float list) (a: Domain.t) =
+    let astate = 
+      match a with
+      | ContinueProgram astate
+      | ISLLatentMemoryError astate -> astate
+      | ExitProgram astate
+      | AbortProgram astate
+      | LatentAbortProgram {astate}
+        -> (astate :> AbductiveDomain.t)
+    in
     let v1 = isContinue a in
     let v2 = isExit a in
     let v3 = isAbort a in
     let v4 = isLatent a in
     let v5 = isError a in
-    let v6 = 
-      match a with
-      | ContinueProgram astate
-      | ISLLatentMemoryError astate -> memory_cardinal astate
-      | ExitProgram astate
-      | AbortProgram astate
-      | LatentAbortProgram {astate}
-        -> memory_cardinal (astate :> AbductiveDomain.t)
-    in
-    let vectors = [v1; v2; v3; v4; v5; v6] in
+    let v6 = memory_cardinal astate in
+    let v7 = var_diff astate in
+    let v8 = skipped_calls astate in
+    let v9 = invalids astate in
+    let vectors = [v1; v2; v3; v4; v5; v6; v7; v8; v9] in
     compute vs vectors 0.
 end
 
