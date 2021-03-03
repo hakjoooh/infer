@@ -799,6 +799,14 @@ let num_of_invalids_post astate =
       else i)
     (astate.post :> BaseDomain.t).attrs 0
 
+let num_of_allocated_post astate =
+  BaseAddressAttributes.fold (fun _ attrs i ->
+      if Attributes.get_allocation attrs
+         |> Option.is_some
+      then i + 1
+      else i)
+    (astate.post :> BaseDomain.t).attrs 0
+    
 module Topl = struct
   let small_step loc event astate =
     {astate with topl= PulseTopl.small_step loc astate.path_condition event astate.topl}

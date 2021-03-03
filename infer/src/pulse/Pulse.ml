@@ -446,7 +446,10 @@ module PulseTransferFunctions = struct
        L.debug Analysis Quiet "The given vector size doesn't match with the number of features.@\n";
        0.
     | x::xs, y::ys ->
-       let acc = acc +. x *. y in
+       let acc =
+         if Float.equal x 0.0 then acc
+         else acc +. x *. y ()
+       in
        compute xs ys acc
                     
   (** feature vectors *)
@@ -478,7 +481,8 @@ module PulseTransferFunctions = struct
     float_of_int (AbductiveDomain.skipped_calls astate)
   let invalids astate =
     float_of_int (AbductiveDomain.num_of_invalids_post astate)
-
+  let allocated astate =
+    float_of_int (AbductiveDomain.num_of_allocated_post astate)
   let score (vs: float list) (a: Domain.t) =
     let astate = 
       match a with
@@ -489,16 +493,17 @@ module PulseTransferFunctions = struct
       | LatentAbortProgram {astate}
         -> (astate :> AbductiveDomain.t)
     in
-    let v1 = isContinue a in
-    let v2 = isExit a in
-    let v3 = isAbort a in
-    let v4 = isLatent a in
-    let v5 = isError a in
-    let v6 = memory_cardinal astate in
-    let v7 = var_diff astate in
-    let v8 = skipped_calls astate in
-    let v9 = invalids astate in
-    let vectors = [v1; v2; v3; v4; v5; v6; v7; v8; v9] in
+    let v1 _ = isContinue a in
+    let v2 _ = isExit a in
+    let v3 _ = isAbort a in
+    let v4 _ = isLatent a in
+    let v5 _ = isError a in
+    let v6 _ = memory_cardinal astate in
+    let v7 _ = var_diff astate in
+    let v8 _ = skipped_calls astate in
+    let v9 _ = invalids astate in
+    let v10 _ = allocated astate in
+    let vectors = [v1; v2; v3; v4; v5; v6; v7; v8; v9; v10] in
     compute vs vectors 0.
 end
 

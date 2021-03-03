@@ -87,11 +87,15 @@ val get_pre : t -> BaseDomain.t
 
 val get_post : t -> BaseDomain.t
 
+(** features to used in join algorithms *)
 val diff_stack_vars : t -> int
 
 val skipped_calls : t -> int
 
 val num_of_invalids_post : t -> int
+
+val num_of_allocated_post : t -> int
+
   
 (** stack operations like {!BaseStack} but that also take care of propagating facts to the
     precondition *)
