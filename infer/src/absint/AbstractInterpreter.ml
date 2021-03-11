@@ -139,27 +139,27 @@ struct
 
     let top_k_join vectors : t -> t -> t =
       (** TODO: naive top-k selecting algorithm. we should revise it later. ***)
-      let rec logr list score =
-        match list, score with
-        | ([], _) | (_, []) -> ()
-        | (x::xs, y::ys) ->
-           (* log *)
-           L.d_printfln "state: (%f)@\n%a" y T.Domain.pp x;
-           logr xs ys
-      in
-      let log list score =
-        L.d_printfln "* Score table";
-        logr list score
-      in
+      (* let rec logr list score =
+       *   match list, score with
+       *   | ([], _) | (_, []) -> ()
+       *   | (x::xs, y::ys) ->
+       *      (\* log *\)
+       *      L.d_printfln "state: (%f)@\n%a" y T.Domain.pp x;
+       *      logr xs ys
+       * in
+       * let log list score =
+       *   L.d_printfln "* Score table";
+       *   logr list score
+       * in *)
       (* let selected_log list =
        *   L.d_printfln "* Selected";
        *   List.iter ~f:(fun x -> L.d_printfln "state: @\n%a" T.Domain.pp x) list;
        *   list
        * in *)
-      let log_param list =
-        L.d_printfln "* join parameters";
-        List.iter ~f:(fun x -> L.d_printfln "%f" x) list
-      in
+      (* let log_param list =
+       *   L.d_printfln "* join parameters";
+       *   List.iter ~f:(fun x -> L.d_printfln "%f" x) list
+       * in *)
       let rec partition fn l1 l2 =
         match (l1, l2) with
         | ([], _) | (_, []) -> ([], [], [], [])
@@ -187,7 +187,7 @@ struct
           | hd::tl -> hd::(select tl (k - 1))
       in
       let select_top_k list scores k =
-          log list scores;
+          (* log list scores; *)
           let sorted = qsort list scores in
           (* selected_log *)
             (select sorted k)
@@ -203,7 +203,7 @@ struct
         if len < n then list
         else 
           let scores_list = List.map ~f:score list in
-          log_param vectors;
+          (* log_param vectors; *)
           select_top_k list scores_list n
 
 

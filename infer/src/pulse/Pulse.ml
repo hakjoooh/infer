@@ -441,10 +441,10 @@ module PulseTransferFunctions = struct
   (** score function for ExecutionDomain.t *)
   let rec compute vs1 vs2 acc =
     match vs1, vs2 with
-    | [], [] -> 0.
+    | [], [] -> acc
     | [], _ | _, [] ->
        L.debug Analysis Quiet "The given vector size doesn't match with the number of features.@\n";
-       0.
+       acc
     | x::xs, y::ys ->
        let acc =
          if Float.equal x 0.0 then acc
@@ -504,6 +504,17 @@ module PulseTransferFunctions = struct
     let v9 _ = invalids astate in
     let v10 _ = allocated astate in
     let vectors = [v1; v2; v3; v4; v5; v6; v7; v8; v9; v10] in
+    (* let rec debug_vectors vs =
+     *   match vs with
+     *   | [] -> L.d_printfln "]@\n"
+     *   | hd::tl ->
+     *      L.d_printfln "%f " (hd ());
+     *     debug_vectors tl
+     * in
+     * let _ =
+     *   L.d_printfln "* features: [ ";
+     *   debug_vectors vectors
+     * in *)
     compute vs vectors 0.
 end
 
