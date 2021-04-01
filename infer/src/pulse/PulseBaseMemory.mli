@@ -18,6 +18,8 @@ module AccessSet : Caml.Set.S with type elt = Access.t
 
 module AddrTrace : sig
   type t = AbstractValue.t * ValueHistory.t
+
+  val pp : Format.formatter -> t -> unit
 end
 
 module Edges : RecencyMap.S with type key = Access.t and type value = AddrTrace.t

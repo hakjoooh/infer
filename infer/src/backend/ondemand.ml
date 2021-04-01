@@ -301,13 +301,17 @@ let get_proc_desc callee_pname =
 
 
 let analyze_callee exe_env ?caller_summary callee_pname =
+  Logging.d_printfln "caller_summary? %s" (string_of_bool (Option.is_some caller_summary));
   register_callee ?caller_summary callee_pname ;
+  Logging.d_printfln "is_active? %s" (string_of_bool (is_active callee_pname));
   if is_active callee_pname then None
   else
     match LocalCache.get callee_pname with
     | Some callee_summary_option ->
+        Logging.d_printfln "local cached";
         callee_summary_option
     | None ->
+        Logging.d_printfln "no local cached";
         let summ_opt =
           if procedure_should_be_analyzed callee_pname then
             match get_proc_desc callee_pname with

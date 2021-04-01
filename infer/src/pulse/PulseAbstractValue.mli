@@ -18,6 +18,8 @@ val pp : F.formatter -> t -> unit
 
 val of_id : int -> t
 
+val to_id : t -> int
+
 module Constants : sig
   val get_int : IntLit.t -> t
   (** Get or create an abstract value associated with a constant {!IntLit.t}. The idea is that

@@ -513,6 +513,8 @@ val pulse_widen_threshold : int
 
 val pulse_nullsafe_report_npe : bool
 
+val pulse_ml_parameters : float list option
+
 val pure_by_default : bool
 
 val quandary_endpoints : Yojson.Basic.t

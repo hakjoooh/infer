@@ -9,6 +9,8 @@ open! IStd
 open PulseBasicInterface
 open PulseDomainInterface
 
+module L = Logging
+
 let report ?(extra_trace = []) proc_desc err_log diagnostic =
   let open Diagnostic in
   Reporting.log_issue proc_desc err_log ~loc:(get_location diagnostic)
@@ -47,6 +49,7 @@ let is_suppressed tenv proc_desc diagnostic astate =
       false
 
 
+<<<<<<< HEAD
 let summary_of_error_post tenv proc_desc mk_error astate =
   match AbductiveDomain.summary_of_post tenv proc_desc astate with
   | Sat (Ok astate) ->
@@ -96,6 +99,7 @@ let report_summary_error tenv proc_desc err_log
     | `ReportNow ->
         if not (is_suppressed tenv proc_desc diagnostic astate) then
           report proc_desc err_log diagnostic ;
+(*        L.debug Analysis Quiet "- Alarm report -@\n%a@\n- End of Alarm Report -@\n" AbductiveDomain.pp astate; *)
         AbortProgram astate
     | `DelayReport latent_issue ->
         if Config.pulse_report_latent_issues then report_latent_issue proc_desc err_log latent_issue ;

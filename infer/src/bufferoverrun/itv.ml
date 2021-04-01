@@ -45,6 +45,12 @@ module ItvPure = struct
   (** (l, u) represents the closed interval [l; u] (of course infinite bounds are open) *)
   type t = Bound.t * Bound.t [@@deriving compare, equal]
 
+  let subst_vars map (l, u) =
+    let subst_vars = Bound.subst_vars map in
+    let l = subst_vars l in
+    let u = subst_vars u in
+    (l, u)
+
   let lb : t -> Bound.t = fst
 
   let ub : t -> Bound.t = snd

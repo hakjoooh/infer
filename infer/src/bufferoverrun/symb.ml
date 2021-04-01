@@ -255,6 +255,10 @@ module Symbol = struct
         {unsigned: extra_bool; non_int: extra_bool; path: SymbolPath.t; bound_end: BoundEnd.t}
   [@@deriving compare]
 
+  let subst_vars map = function
+    | ForeignVariable {id} -> ForeignVariable { id = IntMap.find id map }
+    | _ as s -> s
+
   let pp : F.formatter -> t -> unit =
    fun fmt s ->
     match s with
@@ -401,4 +405,10 @@ module SymbolMap = struct
         true
     | exception Exit ->
         false
+
+  let subst_vars map s =
+    fold (fun k v s ->
+        let k = Symbol.subst_vars map k in
+        add k v s) s empty
+    
 end

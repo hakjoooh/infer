@@ -89,3 +89,7 @@ val has_no_assumptions : t -> bool
 
 val get_var_repr : t -> AbstractValue.t -> AbstractValue.t
 (** get the canonical representative for the variable according to the equality relation *)
+
+val subst_vars : AbstractValue.t AbstractValue.Map.t -> t -> t
+
+val eliminate : keep:AbstractValue.Set.t -> t -> t

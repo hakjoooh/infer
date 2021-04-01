@@ -203,3 +203,12 @@ val get_captured_actuals :
   -> actual_closure:AbstractValue.t * ValueHistory.t
   -> t
   -> (t * (Var.t * (AbstractValue.t * ValueHistory.t)) list) AccessResult.t
+(** performs a call to a function with no summary by optimistically havoc'ing the by-ref actuals and
+    the return value as appropriate *)
+
+val set_oracle: (t, string option) Caml.Hashtbl.t -> unit
+val oracle_is_loaded: unit -> bool
+val transition: string option -> ExecutionDomain.t -> ExecutionDomain.t -> unit
+val transitions: t -> t -> unit
+
+val is_in_oracle: t -> bool

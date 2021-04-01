@@ -208,7 +208,6 @@ module PulseTransferFunctions = struct
               |> Option.map ~f:(fun exec_state -> Ok exec_state) )
     else exec_states_res
 
-
   (* [get_dealloc_from_dynamic_types vars_types loc] returns a dealloc procname and vars and
      type needed to execute a call to dealloc for the given variables for which the dynamic type
      is an Objective-C class. *)
@@ -296,7 +295,9 @@ module PulseTransferFunctions = struct
           PulseReport.report_results tenv proc_desc err_log result
       | Store {e1= lhs_exp; e2= rhs_exp; loc} ->
           (* [*lhs_exp := rhs_exp] *)
+          L.debug Analysis Quiet "store 1@\n";
           let event = ValueHistory.Assignment loc in
+          L.debug Analysis Quiet "store 2@\n";
           let result =
             let<*> astate, (rhs_addr, rhs_history) =
               PulseOperations.eval NoAccess loc rhs_exp astate
@@ -322,6 +323,7 @@ module PulseTransferFunctions = struct
                   let<*> astate, lhs_addr_hist = result in
                   write_function lhs_addr_hist astate )
             in
+          L.debug Analysis Quiet "store 4@\n";
             let astates =
               if Topl.is_active () then
                 List.map astates ~f:(fun result ->
@@ -329,6 +331,7 @@ module PulseTransferFunctions = struct
                     topl_store_step loc ~lhs:lhs_exp ~rhs:rhs_exp astate )
               else astates
             in
+          L.debug Analysis Quiet "store 5@\n";
             match lhs_exp with
             | Lvar pvar when Pvar.is_return pvar ->
                 List.map astates ~f:(fun result ->
@@ -396,11 +399,106 @@ module PulseTransferFunctions = struct
   let exec_instr astate analysis_data cfg_node instr =
     (* Sometimes instead of stopping on contradictions a false path condition is recorded
        instead. Prune these early here so they don't spuriously count towards the disjunct limit. *)
-    exec_instr_aux astate analysis_data cfg_node instr
-    |> List.filter ~f:(fun exec_state -> not (Domain.is_unsat_cheap exec_state))
+    let outs = 
+      exec_instr_aux astate analysis_data cfg_node instr
+      |> List.filter ~f:(fun exec_state -> not (Domain.is_unsat_cheap exec_state))
+    in
+    (* transition: from before to after an instruction *)
+    let pp_proc fmt node = node |> Procdesc.Node.get_proc_name |> Procname.pp fmt in
+    let pp_node fmt node = node |> Procdesc.Node.pp fmt in
+    let pp = Sil.pp_instr ~print_types:false Pp.text in
+    let str = F.asprintf "%a - %a:%a" pp_proc cfg_node pp_node cfg_node pp instr in
+    List.iter outs ~f:(PulseOperations.transition (Some str) astate);
+    outs
+
 
 
   let pp_session_name _node fmt = F.pp_print_string fmt "Pulse"
+
+  (** score function for ExecutionDomain.t *)
+  let rec compute vs1 vs2 acc =
+    match vs1, vs2 with
+    | [], [] -> acc
+    | [], _ | _, [] ->
+       L.debug Analysis Quiet "The given vector size doesn't match with the number of features.@\n";
+       acc
+    | x::xs, y::ys ->
+       let acc =
+         if Float.equal x 0.0 then acc
+         else acc +. x *. y ()
+       in
+       compute xs ys acc
+                    
+  (** feature vectors *)
+  let isContinue astate =
+    match astate with
+    | ContinueProgram _ -> 1.
+    | _ -> 0.
+  let isExit astate =
+    match astate with
+    | ExitProgram _ -> 1.
+    | _ -> 0.
+  let isAbort astate =
+    match astate with
+    | AbortProgram _ -> 1.
+    | _ -> 0.
+  let isLatent astate =
+    match astate with
+    | LatentAbortProgram _ -> 1.
+    | _ -> 0.
+  let isError astate =
+    match astate with
+    | ISLLatentMemoryError _ -> 1.
+    | _ -> 0.
+  let memory_cardinal astate =
+    float_of_int (AbductiveDomain.Memory.cardinal astate)
+  let var_diff astate =
+    float_of_int (AbductiveDomain.diff_stack_vars astate)
+  let skipped_calls astate =
+    float_of_int (AbductiveDomain.skipped_calls astate)
+  let invalids astate =
+    float_of_int (AbductiveDomain.num_of_invalids_post astate)
+  let allocated astate =
+    float_of_int (AbductiveDomain.num_of_allocated_post astate)
+
+  let is_in_oracle (astate: Domain.t) =
+    match astate with
+    | ContinueProgram astate -> PulseOperations.is_in_oracle astate
+    | _ -> true
+
+  let score (vs: float list) (a: Domain.t) =
+    let astate = 
+      match a with
+      | ContinueProgram astate
+      | ISLLatentMemoryError astate -> astate
+      | ExitProgram astate
+      | AbortProgram astate
+      | LatentAbortProgram {astate}
+        -> (astate :> AbductiveDomain.t)
+    in
+    let v1 _ = isContinue a in
+    let v2 _ = isExit a in
+    let v3 _ = isAbort a in
+    let v4 _ = isLatent a in
+    let v5 _ = isError a in
+    let v6 _ = memory_cardinal astate in
+    let v7 _ = var_diff astate in
+    let v8 _ = skipped_calls astate in
+    let v9 _ = invalids astate in
+    let v10 _ = allocated astate in
+    let vectors = [v1; v2; v3; v4; v5; v6; v7; v8; v9; v10] in
+    (* let rec debug_vectors vs =
+     *   match vs with
+     *   | [] -> L.d_printfln "]@\n"
+     *   | hd::tl ->
+     *      L.d_printfln "%f " (hd ());
+     *     debug_vectors tl
+     * in
+     * let _ =
+     *   L.d_printfln "* features: [ ";
+     *   debug_vectors vectors
+     * in *)
+    compute vs vectors 0.
 end
 
 module DisjunctiveAnalyzer =
@@ -410,6 +508,11 @@ module DisjunctiveAnalyzer =
       let join_policy = `UnderApproximateAfter Config.pulse_max_disjuncts
 
       let widen_policy = `UnderApproximateAfterNumIterations Config.pulse_widen_threshold
+
+      let ml_policy = 
+        match Config.pulse_ml_parameters with
+        | Some(x) -> `MLParameters (Some x)
+        | None -> `MLParameters None
     end)
 
 let with_debug_exit_node proc_desc ~f =
@@ -418,9 +521,25 @@ let with_debug_exit_node proc_desc ~f =
     ~pp_name:(fun fmt -> F.pp_print_string fmt "pulse summary creation")
     ~f
 
-
 let checker ({InterproceduralAnalysis.tenv; proc_desc; err_log} as analysis_data) =
   AbstractValue.State.reset () ;
+  begin
+    if not (PulseOperations.oracle_is_loaded ()) then
+      begin
+        L.debug Analysis Quiet "Load the oracle@\n";
+        match Dump.read ~f:(fun chan ->
+            L.debug Analysis Quiet "Load@\n";
+            let elems: (AbductiveDomain.t * string option) list = Marshal.from_channel chan in
+            let hash = Caml.Hashtbl.create (List.length elems) in
+            List.iter elems ~f:(fun (a,b) -> Caml.Hashtbl.add hash a b);
+            (* let elems: (AbductiveDomain.t, unit) Caml.Hashtbl.t = Marshal.from_channel chan in *)
+            hash) with
+        | Some(e) ->
+            L.debug Analysis Quiet "The oracle has been loaded %d@\n" (Caml.Hashtbl.length e);
+            PulseOperations.set_oracle e
+        | None -> ()
+      end
+  end;
   let initial_astate = ExecutionDomain.mk_initial tenv proc_desc in
   let initial = [initial_astate] in
   match DisjunctiveAnalyzer.compute_post analysis_data ~initial proc_desc with
@@ -429,7 +548,19 @@ let checker ({InterproceduralAnalysis.tenv; proc_desc; err_log} as analysis_data
           let updated_posts =
             PulseObjectiveCSummary.update_objc_method_posts analysis_data ~initial_astate ~posts
           in
-          let summary = PulseSummary.of_posts tenv proc_desc err_log updated_posts in
+          let summary = PulseSummary.of_posts_new tenv proc_desc err_log updated_posts in
+          let rec map lst1 lst2 =
+            match lst1, lst2 with
+            | [], [] -> ()
+            | h1::tl1, Some(h2)::tl2 ->
+                (* at the end of the function. it creates a summary *)
+                PulseOperations.transition None h1 (h2: ExecutionDomain.summary :> ExecutionDomain.t);
+                map tl1 tl2
+            | _::tl1, None::tl2 -> map tl1 tl2
+            | _ -> ()
+          in
+          map posts summary;
+          let summary = List.filter_map summary ~f:(fun x -> x) in
           report_topl_errors proc_desc err_log summary ;
           Some summary )
   | None ->

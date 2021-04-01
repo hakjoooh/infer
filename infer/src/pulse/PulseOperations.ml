@@ -7,10 +7,37 @@
 
 open! IStd
 module L = Logging
+module Hashtbl = Caml.Hashtbl
+
 open PulseBasicInterface
 open PulseDomainInterface
 
 type t = AbductiveDomain.t
+
+
+let oracle = Hashtbl.create 1000
+let is_in_oracle (astate : t) =
+  if Dump.is_recording () then true
+  else 
+    begin
+      ( if Config.write_html then
+          let n = Hashtbl.length oracle in
+          L.d_printfln "@]@\n@[The size of oracle: %d@]" n );
+      try 
+        Hashtbl.iter (fun k _ -> if AbductiveDomain.similar ~lhs:k ~rhs:astate then raise (Not_found_s (Base.Sexp.Atom ""))) oracle;false
+      with Not_found_s _ -> true
+                              (* Hashtbl.mem oracle astate *)
+    end
+
+let oracle_loaded = ref false
+let oracle_is_loaded () =
+  L.debug Analysis Quiet "oracle_is_loaded is_recording: %s@\n" (string_of_bool (Dump.is_recording ()));
+  if Dump.is_recording () then true
+  else !oracle_loaded
+    
+let set_oracle (astates: (t, string option) Hashtbl.t) = 
+  oracle_loaded := true;
+  Hashtbl.add_seq oracle (Hashtbl.to_seq astates)
 
 module Import = struct
   type access_mode = Read | Write | NoAccess
@@ -465,6 +492,82 @@ let mark_address_of_cpp_temporary history variable address astate =
 let mark_address_of_stack_variable history variable location address astate =
   AddressAttributes.add_one address (AddressOfStackVariable (variable, location, history)) astate
 
+(* out -> in set *)
+let edges = Hashtbl.create 10000
+let list = Hashtbl.create 1000000
+
+let add i (a: t) (b: t) =
+  if Dump.is_recording () then
+    if AbductiveDomain.equal a b then ()
+    else if Hashtbl.mem edges b then
+      begin
+        Hashtbl.add (Hashtbl.find edges b) a i
+      end
+    else
+      begin
+        let ntbl = Hashtbl.create 100 in
+        Hashtbl.add ntbl a i;
+        Hashtbl.add edges b ntbl
+      end
+
+let transitions (a: t) (b: t) = 
+  add None a b
+                                
+let transition (i: string option) (a: ExecutionDomain.t) (b: ExecutionDomain.t) = 
+  match a, b with
+  | (ContinueProgram a, ContinueProgram b) ->
+      Option.iter i ~f:(fun x -> 
+          L.debug Analysis Quiet "instr - %s@\n" x);
+      L.debug Analysis Quiet "transition from@\n%a@\n" AbductiveDomain.pp a;
+      L.debug Analysis Quiet "transition to@\n%a@\n" AbductiveDomain.pp b;
+      add i a b
+  (* | (ContinueProgram a, AbortProgram b) ->
+   *     L.debug Analysis Quiet "transition from@\n%a@\n" AbductiveDomain.pp a;
+   *     L.debug Analysis Quiet "transition exit to@\n%a@\n" AbductiveDomain.pp (b: AbductiveDomain.summary :> AbductiveDomain.t);
+   *     add i a (b: AbductiveDomain.summary :> AbductiveDomain.t) *)
+  | _ -> ()
+
+let reachable a visited =
+  let rec iter a depth =
+    if Hashtbl.mem visited a then ()
+    else 
+      begin
+        Hashtbl.add visited a ();
+        match Hashtbl.find_opt edges a with
+        | Some s ->
+            L.debug Analysis Quiet "found %d edges@\n" (Hashtbl.length s);
+            Hashtbl.iter (fun a i ->
+                Option.iter i ~f:(fun x ->
+                    L.debug Analysis Quiet "instr to %s@\n" x);
+                L.debug Analysis Quiet "found - %d@\n%a@\n" depth AbductiveDomain.pp a;
+                iter a (depth + 1)) s
+        | None -> 
+            L.debug Analysis Quiet "found none edges@\n";
+            ()
+      end
+  in
+  L.debug Analysis Quiet "search start@\n%a@\n" AbductiveDomain.pp a;
+  iter a 0;
+  L.debug Analysis Quiet "reachable set: %s@\n" (string_of_int (Hashtbl.length visited))
+
+let dump diag astate = 
+  L.debug Analysis Quiet "Error log@\n%s@\n" (Diagnostic.get_message diag);
+  L.debug Analysis Quiet "dump try@\n";
+  if Dump.is_recording () then
+    let set = Hashtbl.create 1000 in
+    reachable astate set;
+    set |>
+    Hashtbl.to_seq |> 
+    Hashtbl.add_seq list
+
+let close () =
+  print_endline ("final edges: "^(string_of_int (Hashtbl.length edges)));
+  print_endline ("final set: "^(string_of_int (Hashtbl.length list)));
+  let list = Hashtbl.fold (fun k v lst -> (k,v)::lst) list [] in
+  Dump.dump list
+
+let () = Epilogues.register ~f:close ~description:"flushing dumps and closing dump file"
+
 
 let check_memory_leak_unreachable unreachable_addrs location astate =
   let check_memory_leak result attributes =
@@ -482,6 +585,8 @@ let check_memory_leak_unreachable unreachable_addrs location astate =
     match allocated_not_freed_opt with
     | Some (procname, trace), false ->
         (* allocated but not freed *)
+        dump (Diagnostic.MemoryLeak {procname; location; allocation_trace= trace}) astate;
+        L.debug Analysis Quiet "restore check: %s@\n" (string_of_bool (is_in_oracle astate));
         Error
           (ReportableError
              { diagnostic= Diagnostic.MemoryLeak {procname; location; allocation_trace= trace}

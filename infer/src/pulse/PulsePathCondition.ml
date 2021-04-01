@@ -24,10 +24,36 @@ module BoItvs = struct
         bo_itv
     | None ->
         Itv.ItvPure.of_foreign_id (v :> int)
+
+  let subst_vars map bo_itvs =
+    let map_i = AbstractValue.Map.fold (fun k v m ->
+        let k = AbstractValue.to_id k in
+        let v = AbstractValue.to_id v in
+        IntMap.add k v m) map IntMap.empty in
+    fold (fun k v m ->
+        (* (if not (AbstractValue.Map.mem k map) then L.d_printfln "* boitvs cannot find %a@\n" AbstractValue.pp k); *)
+        let k =
+          match AbstractValue.Map.find_opt k map with
+          | Some(k) -> k
+          | None -> k
+        in
+        let v = Itv.ItvPure.subst_vars map_i v in
+        add k v m) bo_itvs empty
 end
 
-module CItvs = PrettyPrintable.MakePPMonoMap (AbstractValue) (CItv)
+module CItvs = struct
+  include PrettyPrintable.MakePPMonoMap (AbstractValue) (CItv)
 
+  let subst_vars map m =
+    fold (fun k v m ->
+        (* (if not (AbstractValue.Map.mem k map) then L.d_printfln "* citvs cannot find %a@\n" AbstractValue.pp k); *)
+        let k =
+          match AbstractValue.Map.find_opt k map with
+          | Some(k) -> k
+          | None -> k
+        in
+        add k v m) m empty
+end
 (** A mash-up of several arithmetic domains. At the moment they are independent, i.e. we don't use
     facts deduced by one domain to inform another. *)
 type t =
@@ -40,6 +66,41 @@ let compare phi1 phi2 =
   if phys_equal phi1 phi2 || (phi1.is_unsat && phi2.is_unsat) then 0
   else [%compare: bool * Formula.t] (phi1.is_unsat, phi1.formula) (phi2.is_unsat, phi2.formula)
 
+(* let rewrite addr_old addr_new phi =
+ *   let bo_itvs = phi.bo_itvs in
+ *   let bo_itvs =
+ *     BoItvs.fold (fun k v m ->
+ *         let o_i = AbstractValue.to_id addr_old in
+ *         let n_i = AbstractValue.to_id addr_new in
+ *         let v = Itv.ItvPure.rewrite o_i n_i v in
+ *         if AbstractValue.equal k addr_old then BoItvs.add addr_new v m
+ *         else BoItvs.add k v m) bo_itvs BoItvs.empty in
+ *   let citvs = phi.citvs in
+ *   (\* let citvs = CItvs.rewrite  citvs in *\)
+ *   let formula = Formula.rewrite phi.formula addr_old addr_new in
+ *   { is_unsat= phi.is_unsat
+ *   ; bo_itvs
+ *   ; citvs
+ *   ; formula } *)
+
+let subst_vars map phi =
+  let bo_itvs = BoItvs.subst_vars map phi.bo_itvs in
+  let citvs = CItvs.subst_vars map phi.citvs in
+  let formula = Formula.subst_vars map phi.formula in
+  { is_unsat= phi.is_unsat
+  ; bo_itvs
+  ; citvs
+  ; formula }
+
+let eliminate ~keep phi =
+  let is_in_keep v _ = AbstractValue.Set.mem v keep in
+  let bo_itvs = BoItvs.filter is_in_keep phi.bo_itvs in
+  let citvs = CItvs.filter is_in_keep phi.citvs in
+  let formula = Formula.eliminate ~keep phi.formula in
+  { is_unsat = phi.is_unsat
+  ; bo_itvs
+  ; citvs
+  ; formula }
 
 let equal = [%compare.equal: t]
 

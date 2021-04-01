@@ -125,17 +125,129 @@ struct
           |> not )
 
 
-    let join : t -> t -> t =
+    let orig_join : bool -> t -> t -> t =
       let rec list_rev_append l1 l2 n =
         match l1 with hd :: tl when n > 0 -> list_rev_append tl (hd :: l2) (n - 1) | _ -> l2
       in
-      fun lhs rhs ->
-        if phys_equal lhs rhs then lhs
-        else
-          let (`UnderApproximateAfter n) = DConfig.join_policy in
-          let lhs_length = List.length lhs in
-          if lhs_length >= n then lhs else list_rev_append rhs lhs (n - lhs_length)
+      fun is_selective ->
+        if is_selective then 
+          fun lhs rhs ->
+            if phys_equal lhs rhs then lhs
+            else
+              let (`UnderApproximateAfter n) = DConfig.join_policy in
+              let lhs_length = List.length lhs in
+              let result = 
+                if lhs_length >= n then lhs else list_rev_append rhs lhs (n - lhs_length)
+              in
+              (** select by e-selector *)
+              let result_n = 
+                List.filter result ~f:T.is_in_oracle
+              in
+              ( if Config.write_html then
+                  let n1 = List.length result in
+                  let n2 = List.length result_n in
+                  let n = n1 - n2 in
+                  let diff = List.filter result ~f:(fun x -> not (List.mem result_n x ~equal:(fun x y -> T.Domain.similar ~lhs:x ~rhs:y))) in
+                  L.d_printfln "@]@\n@[Discards %d disjunct%s by selection@]" n (if Int.equal n 1 then "" else "s");
+                  List.iter diff ~f:(fun x -> L.d_printfln "@]@\n@[Discarded@]@\n%a" T.Domain.pp x)
+              ) ;
+                  
+              result_n
+        else 
+          fun lhs rhs ->
+            (** original join operation *)
+            if phys_equal lhs rhs then lhs
+            else
+              let (`UnderApproximateAfter n) = DConfig.join_policy in
+              let lhs_length = List.length lhs in
+              if lhs_length >= n then lhs else list_rev_append rhs lhs (n - lhs_length)
 
+    let top_k_join vectors : t -> t -> t =
+      (** TODO: naive top-k selecting algorithm. we should revise it later. ***)
+      (* let rec logr list score =
+       *   match list, score with
+       *   | ([], _) | (_, []) -> ()
+       *   | (x::xs, y::ys) ->
+       *      (\* log *\)
+       *      L.d_printfln "state: (%f)@\n%a" y T.Domain.pp x;
+       *      logr xs ys
+       * in
+       * let log list score =
+       *   L.d_printfln "* Score table";
+       *   logr list score
+       * in *)
+      (* let selected_log list =
+       *   L.d_printfln "* Selected";
+       *   List.iter ~f:(fun x -> L.d_printfln "state: @\n%a" T.Domain.pp x) list;
+       *   list
+       * in *)
+      (* let log_param list =
+       *   L.d_printfln "* join parameters";
+       *   List.iter ~f:(fun x -> L.d_printfln "%f" x) list
+       * in *)
+      let rec partition fn l1 l2 =
+        match (l1, l2) with
+        | ([], _) | (_, []) -> ([], [], [], [])
+        | (hd::tl, hd2::tl2) ->
+           let a1, a2, b1, b2 = partition fn tl tl2 in
+           if fn hd2 then (hd::a1, a2, hd2::b1, b2)
+           else (a1, hd::a2, b1, hd2::b2)
+      in
+      let rec qsort l1 l2 =
+        match (l1, l2) with
+        | ([], _) | (_, []) -> []
+        | (hd::tl, hd2::tl2) ->
+           (* select a head element as a pivot, which is bad. *)
+           let x = hd2 in 
+           let s1, l1, s2, l2 = partition (fun (y: float) -> Float.compare x y < 0) tl tl2 in
+           let a1 = qsort s1 s2 in
+           let b1 = qsort l1 l2 in
+           a1 @ (hd::b1)
+      in
+      let rec select list k =
+        if k <= 0 then []
+        else 
+          match list with
+          | [] -> []
+          | hd::tl -> hd::(select tl (k - 1))
+      in
+      let select_top_k list scores k =
+          (* log list scores; *)
+          let sorted = qsort list scores in
+          (* selected_log *)
+            (select sorted k)
+      in
+      (** until here ***)
+      let score = T.score vectors in
+      let (`UnderApproximateAfter n) = DConfig.join_policy in
+      fun lhs rhs ->
+      if phys_equal lhs rhs then lhs
+      else
+        let list = lhs @ rhs in
+        let len = List.length list in
+        if len < n then list
+        else 
+          let scores_list = List.map ~f:score list in
+          (* log_param vectors; *)
+          select_top_k list scores_list n
+
+    let join : t -> t -> t =
+      let (`MLParameters ml_policy) = DConfig.ml_policy in
+      match ml_policy with
+      | Some(_) -> 
+          (* top_k_join vectors *)
+          L.debug Analysis Quiet "join mode: %s@\n" (string_of_bool true);
+          orig_join true
+
+      | None -> 
+          L.debug Analysis Quiet "join mode: %s@\n" (string_of_bool false);
+          orig_join false
+
+    let join_widen : t -> t -> t =
+      let (`MLParameters ml_policy) = DConfig.ml_policy in
+      match ml_policy with
+      | Some(vectors) -> top_k_join vectors
+      | None -> orig_join false
 
     (** check if elements of [disj] appear in [of_] in the same order, using pointer equality on
         abstract states to compare elements quickly *)
@@ -159,7 +271,7 @@ struct
       let rev_rhs_not_in_lhs = rev_filter_not_over_approximated rhs ~not_in:lhs in
       (* cheeky: this is only used in pulse, whose (<=) is actually a symmetric relation so there's
          no need to filter out elements of [lhs] *)
-      join lhs rev_rhs_not_in_lhs
+      join_widen lhs rev_rhs_not_in_lhs
 
 
     let widen ~prev ~next ~num_iters =
@@ -187,6 +299,7 @@ struct
           let (`UnderApproximateAfter n) = DConfig.join_policy in
           List.length post_disjuncts >= n
         in
+        (* TODO: It skips executing disjunctions when it reaches the limit. *)
         if should_skip then (
           L.d_printfln "@[<v2>Reached max disjuncts limit, skipping disjunct #%d@;@]" i ;
           post_disjuncts )

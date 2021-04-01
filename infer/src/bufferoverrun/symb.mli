@@ -123,6 +123,8 @@ module Symbol : sig
   val get_foreign_id_exn : t -> int
   (** Return the [int] id of the foreign variable represented by the symbol. Will fail if called on
       a symbol not created with [of_foreign_id]. *)
+
+  val subst_vars : int IntMap.t -> t -> t
 end
 
 module SymbolSet : sig
@@ -135,4 +137,6 @@ module SymbolMap : sig
   include PrettyPrintable.PPMap with type key = Symbol.t
 
   val for_all2 : f:(key -> 'a option -> 'b option -> bool) -> 'a t -> 'b t -> bool
+
+  val subst_vars : int IntMap.t -> 'a t -> 'a t
 end

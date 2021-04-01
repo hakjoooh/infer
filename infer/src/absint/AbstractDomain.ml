@@ -24,6 +24,13 @@ module type NoJoin = sig
   val leq : lhs:t -> rhs:t -> bool
 end
 
+module type NoJoinNew = sig
+  include PrettyPrintable.PrintableType
+
+  val leq : lhs:t -> rhs:t -> bool
+  val similar: lhs:t -> rhs:t -> bool
+end
+
 module type S = sig
   include NoJoin
 

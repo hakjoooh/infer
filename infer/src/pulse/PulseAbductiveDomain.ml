@@ -105,6 +105,65 @@ let pp f {post; pre; topl; path_condition; skipped_calls} =
 
 let set_path_condition path_condition astate = {astate with path_condition}
 
+let similar ~lhs ~rhs =
+  phys_equal lhs rhs
+  || SkippedCalls.leq ~lhs:lhs.skipped_calls ~rhs:rhs.skipped_calls
+     && ((not Config.pulse_isl) || equal_isl_status lhs.isl_status rhs.isl_status)
+     &&
+     match
+       BaseDomain.isograph_map BaseDomain.empty_mapping
+         ~lhs:(lhs.pre :> BaseDomain.t)
+         ~rhs:(rhs.pre :> BaseDomain.t)
+     with
+     | NotIsomorphic ->
+         let str1 = F.asprintf "%a" pp lhs in
+         let str2 = F.asprintf "%a" pp rhs in
+         (if Int.equal (String.length str1) (String.length str2) then
+            L.d_printfln "* similar?@\n lhs - %s@\n rhs - %s@\n" str1 str2);
+         false
+     | IsomorphicUpTo foot_mapping ->
+       L.d_printfln "* first mapping@\n";
+         let _ =
+           AbstractValue.Map.iter (fun a b ->
+               L.d_printfln "* rewrite %a -> %a" AbstractValue.pp a AbstractValue.pp b) (BaseDomain.rhs_to_lhs foot_mapping)
+         in
+         match
+           BaseDomain.isograph_map foot_mapping
+             ~lhs:(lhs.post :> BaseDomain.t)
+             ~rhs:(rhs.post :> BaseDomain.t)
+         with
+         | NotIsomorphic -> false
+         | IsomorphicUpTo foot_mapping ->
+             (* TODO: mapping is not enough to unify PathCondition. *)
+             L.d_printfln "* second mapping@\n";
+             try 
+               let rhs_to_lhs = BaseDomain.rhs_to_lhs foot_mapping in
+               let _ =
+                 AbstractValue.Map.iter (fun a b ->
+                     L.d_printfln "* rewrite %a -> %a" AbstractValue.pp a AbstractValue.pp b) rhs_to_lhs 
+               in
+               let _ = 
+                 L.d_printfln "similar but not equal@\n- lhs: %a@\n- rhs: %a@\n" pp lhs pp rhs
+               in
+               (* let rhs_path_condition = PathCondition.subst_vars rhs_to_lhs rhs.path_condition in *)
+               let lhs_path_condition = lhs.path_condition in
+               let rhs_path_condition = rhs.path_condition in
+               (* let keep_lhs = AbstractValue.Map.fold (fun _ k set ->
+                *     AbstractValue.Set.add k set) rhs_to_lhs AbstractValue.Set.empty in
+                * let keep_rhs = AbstractValue.Map.fold (fun k _ set ->
+                *     AbstractValue.Set.add k set) rhs_to_lhs AbstractValue.Set.empty in
+                * let lhs_path_condition = PathCondition.eliminate ~keep:keep_lhs lhs_path_condition in
+                * let rhs_path_condition = PathCondition.eliminate ~keep:keep_rhs rhs_path_condition in
+                * let _ = L.d_printfln "* eliminated left: @\n%a@\n" PathCondition.pp lhs_path_condition in
+                * let _ = L.d_printfln "* eliminated right: @\n%a@\n" PathCondition.pp rhs_path_condition in *)
+               let rhs_path_condition = PathCondition.subst_vars rhs_to_lhs rhs_path_condition in
+               let b = PathCondition.equal lhs_path_condition rhs_path_condition in
+               let _ = L.d_printfln "* rewritten test: %s@\n" (string_of_bool b) in
+               let _ = L.d_printfln "* compare left: @\n%a@\n" PathCondition.pp lhs_path_condition in
+               let _ = L.d_printfln "* compare right: @\n%a@\n" PathCondition.pp rhs_path_condition in
+               b
+             with _ -> false
+
 let leq ~lhs ~rhs =
   phys_equal lhs rhs
   || SkippedCalls.leq ~lhs:lhs.skipped_calls ~rhs:rhs.skipped_calls
@@ -112,8 +171,8 @@ let leq ~lhs ~rhs =
      &&
      match
        BaseDomain.isograph_map BaseDomain.empty_mapping
-         ~lhs:(rhs.pre :> BaseDomain.t)
-         ~rhs:(lhs.pre :> BaseDomain.t)
+         ~lhs:(lhs.pre :> BaseDomain.t)
+         ~rhs:(rhs.pre :> BaseDomain.t)
      with
      | NotIsomorphic ->
          false
@@ -433,6 +492,8 @@ module Memory = struct
 
 
   let find_opt address astate = BaseMemory.find_opt address (astate.post :> base_domain).heap
+
+  let cardinal astate = BaseMemory.cardinal (astate.post :> base_domain).heap
 end
 
 let add_edge_on_src src location stack =
@@ -827,7 +888,44 @@ let incorporate_new_eqs new_eqs astate =
     | Sat (astate, Some (address, must_be_valid)) ->
         Error (`PotentialInvalidAccess (astate, address, must_be_valid))
 
+let diff_stack_vars astate =
+  let prevars = BaseStack.cardinal (astate.pre :> base_domain).stack in
+  let postvars = BaseStack.cardinal (astate.post :> base_domain).stack in
+  prevars - postvars
 
+let skipped_calls astate = SkippedCalls.cardinal astate.skipped_calls
+
+(*
+    | AddressOfCppTemporary of Var.t * ValueHistory.t
+    | AddressOfStackVariable of Var.t * Location.t * ValueHistory.t
+    | Allocated of Procname.t * Trace.t
+    | Closure of Procname.t
+    | DynamicType of Typ.Name.t
+    | EndOfCollection
+    | Invalid of Invalidation.t * Trace.t
+    | ISLAbduced of Trace.t
+    | MustBeInitialized of Trace.t
+    | MustBeValid of Trace.t
+    | StdVectorReserve
+    | Uninitialized
+    | WrittenTo of Trace.t
+ *)
+let num_of_invalids_post astate =
+  BaseAddressAttributes.fold (fun _ attrs i ->
+      if Attributes.get_invalid attrs
+         |> Option.is_some
+      then i + 1
+      else i)
+    (astate.post :> BaseDomain.t).attrs 0
+
+let num_of_allocated_post astate =
+  BaseAddressAttributes.fold (fun _ attrs i ->
+      if Attributes.get_allocation attrs
+         |> Option.is_some
+      then i + 1
+      else i)
+    (astate.post :> BaseDomain.t).attrs 0
+    
 module Topl = struct
   let small_step loc event astate =
     {astate with topl= PulseTopl.small_step loc astate.path_condition event astate.topl}

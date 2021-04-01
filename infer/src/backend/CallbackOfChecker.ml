@@ -19,7 +19,9 @@ let () =
 let mk_interprocedural_t ~f_analyze_dep ~get_payload exe_env summary
     ?(tenv = Exe_env.get_proc_tenv exe_env (Summary.get_proc_name summary)) () =
   let analyze_dependency proc_name =
+    Logging.d_printfln "check CallbackOfChecker.ml";
     let summary = Ondemand.analyze_proc_name exe_env ~caller_summary:summary proc_name in
+    Logging.d_printfln "computed? %s" (string_of_bool (Option.is_some summary));
     Option.bind summary ~f:(fun {Summary.payloads; proc_desc; _} ->
         f_analyze_dep proc_desc (get_payload payloads) )
   in

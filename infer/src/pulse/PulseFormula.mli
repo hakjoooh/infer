@@ -63,6 +63,8 @@ val simplify :
   -> t
   -> (t * new_eqs) SatUnsat.t
 
+val eliminate : keep:Var.Set.t -> t -> t
+
 val and_fold_subst_variables :
      t
   -> up_to_f:t
@@ -83,3 +85,5 @@ module DynamicTypes : sig
   (** Simplifies [IsInstanceOf(var, typ)] predicate when dynamic type information is available in
       state. **)
 end
+
+val subst_vars : Var.t Var.Map.t -> t -> t

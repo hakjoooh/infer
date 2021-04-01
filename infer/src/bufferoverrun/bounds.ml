@@ -220,8 +220,10 @@ module SymLinear = struct
     | _ ->
         None
 
-
   let exists_str ~f x = M.exists (fun k _ -> Symb.Symbol.exists_str ~f k) x
+
+  let subst_vars map m = M.subst_vars map m
+      
 end
 
 module Bound = struct
@@ -1280,6 +1282,15 @@ module Bound = struct
         Symb.Symbol.exists_str ~f s
     | MinMaxB (_, x, y) | MultB (_, x, y) ->
         exists_str ~f x || exists_str ~f y
+
+  let rec subst_vars map b =
+    match b with
+    | MInf | PInf -> b
+    | Linear (z, m) -> Linear (z, SymLinear.subst_vars map m)
+    | MinMax (z1, s, mm, z2, sym) -> MinMax (z1, s, mm, z2, Symb.Symbol.subst_vars map sym)
+    | MinMaxB (mm, t1, t2) -> MinMaxB (mm, subst_vars map t1, subst_vars map t2)
+    | MultB (z, t1, t2) -> MultB (z, subst_vars map t1, subst_vars map t2)
+
 end
 
 type ('c, 's, 't) valclass = Constant of 'c | Symbolic of 's | ValTop of 't

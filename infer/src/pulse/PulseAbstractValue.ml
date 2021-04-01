@@ -27,6 +27,8 @@ let yojson_of_t l = `String (F.asprintf "%a" pp l)
 
 let of_id v = v
 
+let to_id l: int = l
+
 module PPKey = struct
   type nonrec t = t [@@deriving compare]
 

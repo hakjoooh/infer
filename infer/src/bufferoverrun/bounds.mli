@@ -142,6 +142,8 @@ module Bound : sig
   (** Check if [bound] is [path+1] when called [is_incr_of path bound] *)
 
   val exists_str : f:(string -> bool) -> t -> bool
+
+  val subst_vars : int IntMap.t -> t -> t
 end
 
 module BoundTrace : sig

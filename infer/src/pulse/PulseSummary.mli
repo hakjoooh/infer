@@ -11,6 +11,7 @@ open PulseDomainInterface
 type t = ExecutionDomain.summary list [@@deriving yojson_of]
 
 val of_posts : Tenv.t -> Procdesc.t -> Errlog.t -> ExecutionDomain.t list -> t
+val of_posts_new : Tenv.t -> Procdesc.t -> Errlog.t -> ExecutionDomain.t list -> ExecutionDomain.summary option list
 
 val force_exit_program :
   Tenv.t -> Procdesc.t -> Errlog.t -> ExecutionDomain.t -> _ ExecutionDomain.base_t option

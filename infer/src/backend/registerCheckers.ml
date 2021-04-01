@@ -150,6 +150,7 @@ let all_checkers =
   ; { checker= Pulse
     ; callbacks=
         (let pulse = interprocedural Payloads.Fields.pulse Pulse.checker in
+         Dump.setup_dump_file () ;
          [(pulse, Clang); (pulse, Java)] ) }
   ; { checker= Impurity
     ; callbacks=

@@ -1018,6 +1018,34 @@ module Atom = struct
     let t1, t2 = get_terms atom in
     Term.has_var_notin vars t1 || Term.has_var_notin vars t2
 
+  let term_subst_vars map t =
+    Term.subst_variables t ~f:(fun v -> 
+        let v =
+          match Var.Map.find_opt v map with
+          | Some(v) -> v
+          | None -> v
+        in
+        (* let nv = Var.Map.find v map in *)
+        VarSubst v)
+
+  let subst_vars map atom =
+    match atom with
+    | LessEqual (t1, t2) ->
+        let t1 = term_subst_vars map t1 in
+        let t2 = term_subst_vars map t2 in
+        LessEqual (t1, t2)
+    | LessThan (t1, t2) ->
+        let t1 = term_subst_vars map t1 in
+        let t2 = term_subst_vars map t2 in
+        LessThan (t1, t2)
+    | Equal (t1, t2) ->
+        let t1 = term_subst_vars map t1 in
+        let t2 = term_subst_vars map t2 in
+        Equal (t1, t2)
+    | NotEqual (t1, t2) ->
+        let t1 = term_subst_vars map t1 in
+        let t2 = term_subst_vars map t2 in
+        NotEqual (t1, t2)
 
   module Set = struct
     include Caml.Set.Make (struct
@@ -1041,8 +1069,7 @@ let sat_of_eval_result (eval_result : Atom.eval_result) =
   match eval_result with True -> Sat None | False -> Unsat | Atom atom -> Sat (Some atom)
 
 
-module VarUF =
-  UnionFind.Make
+module VarUF = UnionFind.Make
     (struct
       type t = Var.t [@@deriving compare, equal]
 
@@ -1097,6 +1124,52 @@ module Formula = struct
     ; linear_eqs= Var.Map.empty
     ; term_eqs= Term.VarMap.empty
     ; atoms= Atom.Set.empty }
+
+  let subst_vars map phi =
+    let var_eqs = VarUF.apply_subst map phi.var_eqs in
+    let linear_eqs =
+      Var.Map.fold (fun k v m ->
+          (* (if not (Var.Map.mem k map) then L.d_printfln "* formula cannot find %a@\n" Var.pp k); *)
+          (* let k = Var.Map.find k map in *)
+          let k =
+            match Var.Map.find_opt k map with
+            | Some(k) -> k
+            | None -> k
+          in
+          let v = LinArith.subst_variables v ~f:(fun x ->
+              (* (if not (Var.Map.mem x map) then *)
+                 (* begin
+                  *   Var.Map.iter (fun k v ->
+                  *       L.d_printfln "- map %a -> %a" Var.pp k Var.pp v) map;
+                  *   L.d_printfln "* linarith formula cannot find %a@\n" Var.pp x
+                  * end); *)
+              let x =
+                match Var.Map.find_opt x map with
+                | Some(x) -> x
+                | None -> x
+              in
+              (* let x = Var.Map.find x map in *)
+              VarSubst x) in
+          Var.Map.add k v m) phi.linear_eqs Var.Map.empty in
+    let atoms = Atom.Set.map (fun v -> Atom.subst_vars map v) phi.atoms in
+    { var_eqs
+    ; linear_eqs
+    ; atoms }
+
+  (* let rewrite phi o_v n_v =
+   *   let var_eqs = phi.var_eqs in
+   *   let var_eqs = VarUF.apply_subst (Var.Map.add o_v n_v Var.Map.empty) var_eqs in
+   *   let linear_eqs = phi.linear_eqs in
+   *   let linear_eqs =
+   *     Var.Map.fold (fun k v m ->
+   *         let k = if Var.equal k o_v then n_v else k in
+   *         let v = LinArith.subst o_v n_v v in
+   *         Var.Map.add k v m) linear_eqs Var.Map.empty in
+   *   let atoms = phi.atoms in
+   *   let atoms = Atom.Set.map (fun v -> Atom.rewrite o_v (VarSubst n_v) v) atoms in
+   *   { var_eqs
+   *   ; linear_eqs
+   *   ; atoms } *)
 
 
   let pp_with_pp_var pp_var fmt phi =
@@ -1883,6 +1956,11 @@ let simplify tenv ~get_dynamic_type ~keep phi =
   let phi = DeadVariables.eliminate ~keep phi in
   (phi, new_eqs)
 
+let eliminate ~keep phi = 
+  let x = QuantifierElimination.eliminate_vars ~keep phi in
+  match x with
+  | Sat x -> x
+  | Unsat -> phi
 
 let is_known_zero phi v =
   Var.Map.find_opt (VarUF.find phi.both.var_eqs v :> Var.t) phi.both.linear_eqs
@@ -1894,4 +1972,16 @@ let has_no_assumptions phi =
   Atom.Set.for_all (fun atom -> Formula.Normalizer.implies_atom phi.known atom) phi.pruned
 
 
+<<<<<<< HEAD
 let get_var_repr phi v = (Formula.Normalizer.get_repr phi.known v :> Var.t)
+=======
+let get_var_repr phi v = (Formula.Normalizer.get_repr phi.both v :> Var.t)
+
+let subst_vars map phi =
+  let known = Formula.subst_vars map phi.known in
+  let pruned = Atom.Set.map (fun v -> Atom.subst_vars map v) phi.pruned in
+  let both = Formula.subst_vars map phi.both in
+  { known
+  ; pruned
+  ; both }
+>>>>>>> fe65a1ae4 (yk: ml research rebase.)

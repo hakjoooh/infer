@@ -71,3 +71,10 @@ let of_posts tenv proc_desc err_log posts =
       L.d_printfln "Creating spec out of state #%d:@\n%a" i ExecutionDomain.pp exec_state ;
       exec_summary_of_post_common tenv proc_desc err_log exec_state ~continue_program:(fun astate ->
           ContinueProgram astate ) )
+
+
+let of_posts_new tenv proc_desc err_log posts =
+  List.mapi posts ~f:(fun i exec_state ->
+      L.d_printfln "Creating spec out of state #%d:@\n%a" i ExecutionDomain.pp exec_state ;
+      exec_summary_of_post_common tenv proc_desc err_log exec_state ~continue_program:(fun astate ->
+          ContinueProgram astate ) )

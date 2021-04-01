@@ -2058,6 +2058,10 @@ and pulse_nullsafe_report_npe =
   CLOpt.mk_bool ~long:"pulse-nullsafe-report-npe" ~default:true
     "[Pulse] Suppress NPE reports on files marked @Nullsafe."
 
+and pulse_ml_parameters =
+  CLOpt.mk_string_opt ~long:"pulse-ml-parameters"
+    ~in_help:InferCommand.[(Analyze, manual_generic)]
+    "ML parameters"
 
 and pure_by_default =
   CLOpt.mk_bool ~long:"pure-by-default" ~default:false
@@ -3285,6 +3289,15 @@ and pulse_report_latent_issues = !pulse_report_latent_issues
 and pulse_widen_threshold = !pulse_widen_threshold
 
 and pulse_nullsafe_report_npe = !pulse_nullsafe_report_npe
+
+and pulse_ml_parameters =
+  match !pulse_ml_parameters with
+  | Some(xs) ->
+     String.split xs ~on:','
+     |> List.map ~f:(String.filter ~f:(fun c -> not (Char.equal c ' ')))
+     |> List.map ~f:Float.of_string
+     |> Option.some
+  | None -> None
 
 and pure_by_default = !pure_by_default
 
