@@ -1154,6 +1154,7 @@ module Formula = struct
     let atoms = Atom.Set.map (fun v -> Atom.subst_vars map v) phi.atoms in
     { var_eqs
     ; linear_eqs
+    ; term_eqs= phi.term_eqs (* TODO *)
     ; atoms }
 
   (* let rewrite phi o_v n_v =
@@ -1972,10 +1973,7 @@ let has_no_assumptions phi =
   Atom.Set.for_all (fun atom -> Formula.Normalizer.implies_atom phi.known atom) phi.pruned
 
 
-<<<<<<< HEAD
 let get_var_repr phi v = (Formula.Normalizer.get_repr phi.known v :> Var.t)
-=======
-let get_var_repr phi v = (Formula.Normalizer.get_repr phi.both v :> Var.t)
 
 let subst_vars map phi =
   let known = Formula.subst_vars map phi.known in
@@ -1984,4 +1982,3 @@ let subst_vars map phi =
   { known
   ; pruned
   ; both }
->>>>>>> fe65a1ae4 (yk: ml research rebase.)

@@ -452,14 +452,14 @@ module PulseTransferFunctions = struct
     | _ -> 0.
   let memory_cardinal astate =
     float_of_int (AbductiveDomain.Memory.cardinal astate)
-  let var_diff astate =
-    float_of_int (AbductiveDomain.diff_stack_vars astate)
-  let skipped_calls astate =
-    float_of_int (AbductiveDomain.skipped_calls astate)
-  let invalids astate =
-    float_of_int (AbductiveDomain.num_of_invalids_post astate)
-  let allocated astate =
-    float_of_int (AbductiveDomain.num_of_allocated_post astate)
+  let var_diff _ =
+    float_of_int (0) (* (AbductiveDomain.diff_stack_vars astate) *)
+  let skipped_calls _ =
+    float_of_int (0) (* (AbductiveDomain.skipped_calls astate) *)
+  let invalids _ =
+    float_of_int (0) (* (AbductiveDomain.num_of_invalids_post astate) *)
+  let allocated _ =
+    float_of_int (0) (* (AbductiveDomain.num_of_allocated_post astate) *)
 
   let is_in_oracle (astate: Domain.t) =
     match astate with
@@ -467,15 +467,17 @@ module PulseTransferFunctions = struct
     | _ -> true
 
   let score (vs: float list) (a: Domain.t) =
-    let astate = 
+    let get_state a =
       match a with
-      | ContinueProgram astate
-      | ISLLatentMemoryError astate -> astate
+      | ContinueProgram astate -> (astate :> AbductiveDomain.t)
       | ExitProgram astate
       | AbortProgram astate
+      | ISLLatentMemoryError astate -> (astate :> AbductiveDomain.t)
       | LatentAbortProgram {astate}
         -> (astate :> AbductiveDomain.t)
+      | LatentInvalidAccess {astate} -> (astate :> AbductiveDomain.t)
     in
+    let astate = get_state a in
     let v1 _ = isContinue a in
     let v2 _ = isExit a in
     let v3 _ = isAbort a in

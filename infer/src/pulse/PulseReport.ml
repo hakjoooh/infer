@@ -9,7 +9,7 @@ open! IStd
 open PulseBasicInterface
 open PulseDomainInterface
 
-module L = Logging
+(* module L = Logging *)
 
 let report ?(extra_trace = []) proc_desc err_log diagnostic =
   let open Diagnostic in
@@ -49,7 +49,6 @@ let is_suppressed tenv proc_desc diagnostic astate =
       false
 
 
-<<<<<<< HEAD
 let summary_of_error_post tenv proc_desc mk_error astate =
   match AbductiveDomain.summary_of_post tenv proc_desc astate with
   | Sat (Ok astate) ->

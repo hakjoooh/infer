@@ -59,14 +59,19 @@ let similar ~lhs ~rhs =
   phys_equal lhs rhs
   ||
   match (lhs, rhs) with
-  | AbortProgram astate1, AbortProgram astate2 | ExitProgram astate1, ExitProgram astate2 ->
-      AbductiveDomain.similar ~lhs:(astate1 :> AbductiveDomain.t) ~rhs:(astate2 :> AbductiveDomain.t)
-  | ContinueProgram astate1, ContinueProgram astate2
+  | AbortProgram astate1, AbortProgram astate2
+  | ExitProgram astate1, ExitProgram astate2
   | ISLLatentMemoryError astate1, ISLLatentMemoryError astate2 ->
-      AbductiveDomain.similar ~lhs:astate1 ~rhs:astate2
+      AbductiveDomain.similar ~lhs:(astate1 :> AbductiveDomain.t) ~rhs:(astate2 :> AbductiveDomain.t)
+  | ContinueProgram astate1, ContinueProgram astate2 ->
+      AbductiveDomain.leq ~lhs:astate1 ~rhs:astate2
   | ( LatentAbortProgram {astate= astate1; latent_issue= issue1}
     , LatentAbortProgram {astate= astate2; latent_issue= issue2} ) ->
       LatentIssue.equal issue1 issue2
+      && AbductiveDomain.similar ~lhs:(astate1 :> AbductiveDomain.t) ~rhs:(astate2 :> AbductiveDomain.t)
+  | ( LatentInvalidAccess {astate= astate1; address= v1; must_be_valid= _}
+    , LatentInvalidAccess {astate= astate2; address= v2; must_be_valid= _} ) ->
+      AbstractValue.equal v1 v2
       && AbductiveDomain.similar ~lhs:(astate1 :> AbductiveDomain.t) ~rhs:(astate2 :> AbductiveDomain.t)
   | _ ->
       false

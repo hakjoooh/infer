@@ -108,7 +108,7 @@ let set_path_condition path_condition astate = {astate with path_condition}
 let similar ~lhs ~rhs =
   phys_equal lhs rhs
   || SkippedCalls.leq ~lhs:lhs.skipped_calls ~rhs:rhs.skipped_calls
-     && ((not Config.pulse_isl) || equal_isl_status lhs.isl_status rhs.isl_status)
+     && PathCondition.equal lhs.path_condition rhs.path_condition
      &&
      match
        BaseDomain.isograph_map BaseDomain.empty_mapping
@@ -888,6 +888,7 @@ let incorporate_new_eqs new_eqs astate =
     | Sat (astate, Some (address, must_be_valid)) ->
         Error (`PotentialInvalidAccess (astate, address, must_be_valid))
 
+(*
 let diff_stack_vars astate =
   let prevars = BaseStack.cardinal (astate.pre :> base_domain).stack in
   let postvars = BaseStack.cardinal (astate.post :> base_domain).stack in
@@ -925,6 +926,7 @@ let num_of_allocated_post astate =
       then i + 1
       else i)
     (astate.post :> BaseDomain.t).attrs 0
+*)
     
 module Topl = struct
   let small_step loc event astate =
