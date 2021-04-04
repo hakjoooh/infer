@@ -242,3 +242,7 @@ module Topl : sig
 
   val get : summary -> PulseTopl.state
 end
+
+(** ML feature vectors *)
+val feature_vector : t -> float lazy_t list
+

@@ -42,6 +42,7 @@ type id =
   | TestDeterminatorReport  (** the report produced by the test determinator capture mode *)
   | TestDeterminatorTempResults  (** a directory *)
   | TraceForML (** a trace dump file for training *)
+  | TrainingDataSet (** a data-set for training *)
 
 val get_path : results_dir:string -> id -> string
 (** the absolute path for the given entry *)

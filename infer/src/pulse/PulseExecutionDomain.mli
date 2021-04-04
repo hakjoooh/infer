@@ -31,7 +31,7 @@ type 'abductive_domain_t base_t =
 
 type t = AbductiveDomain.t base_t
 
-include AbstractDomain.NoJoinNew with type t := t
+include AbstractDomain.NoJoinForML with type t := t
 
 val continue : AbductiveDomain.t -> t
 
@@ -41,3 +41,5 @@ val is_unsat_cheap : t -> bool
 (** see {!PulsePathCondition.is_unsat_cheap} *)
 
 type summary = AbductiveDomain.summary base_t [@@deriving compare, equal, yojson_of]
+
+val feature_vector : t -> float lazy_t list

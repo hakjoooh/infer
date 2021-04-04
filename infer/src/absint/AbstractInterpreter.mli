@@ -82,3 +82,11 @@ module MakeDisjunctive
     with type TransferFunctions.analysis_data = T.analysis_data
      and module TransferFunctions.CFG = T.CFG
      and type TransferFunctions.Domain.t = T.Domain.t list
+
+module MakeDisjunctiveML
+    (T : TransferFunctions.DisjReadyWithML)
+    (DConfig : TransferFunctions.DisjunctiveConfig) :
+  S
+    with type TransferFunctions.analysis_data = T.analysis_data
+     and module TransferFunctions.CFG = T.CFG
+     and type TransferFunctions.Domain.t = T.Domain.t list

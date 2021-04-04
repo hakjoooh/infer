@@ -295,9 +295,7 @@ module PulseTransferFunctions = struct
           PulseReport.report_results tenv proc_desc err_log result
       | Store {e1= lhs_exp; e2= rhs_exp; loc} ->
           (* [*lhs_exp := rhs_exp] *)
-          L.debug Analysis Quiet "store 1@\n";
           let event = ValueHistory.Assignment loc in
-          L.debug Analysis Quiet "store 2@\n";
           let result =
             let<*> astate, (rhs_addr, rhs_history) =
               PulseOperations.eval NoAccess loc rhs_exp astate
@@ -323,7 +321,6 @@ module PulseTransferFunctions = struct
                   let<*> astate, lhs_addr_hist = result in
                   write_function lhs_addr_hist astate )
             in
-          L.debug Analysis Quiet "store 4@\n";
             let astates =
               if Topl.is_active () then
                 List.map astates ~f:(fun result ->
@@ -331,7 +328,6 @@ module PulseTransferFunctions = struct
                     topl_store_step loc ~lhs:lhs_exp ~rhs:rhs_exp astate )
               else astates
             in
-          L.debug Analysis Quiet "store 5@\n";
             match lhs_exp with
             | Lvar pvar when Pvar.is_return pvar ->
                 List.map astates ~f:(fun result ->
@@ -415,96 +411,15 @@ module PulseTransferFunctions = struct
 
   let pp_session_name _node fmt = F.pp_print_string fmt "Pulse"
 
-  (** score function for ExecutionDomain.t *)
-  let rec compute vs1 vs2 acc =
-    match vs1, vs2 with
-    | [], [] -> acc
-    | [], _ | _, [] ->
-       L.debug Analysis Quiet "The given vector size doesn't match with the number of features.@\n";
-       acc
-    | x::xs, y::ys ->
-       let acc =
-         if Float.equal x 0.0 then acc
-         else acc +. x *. y ()
-       in
-       compute xs ys acc
-                    
-  (** feature vectors *)
-  let isContinue astate =
-    match astate with
-    | ContinueProgram _ -> 1.
-    | _ -> 0.
-  let isExit astate =
-    match astate with
-    | ExitProgram _ -> 1.
-    | _ -> 0.
-  let isAbort astate =
-    match astate with
-    | AbortProgram _ -> 1.
-    | _ -> 0.
-  let isLatent astate =
-    match astate with
-    | LatentAbortProgram _ -> 1.
-    | _ -> 0.
-  let isError astate =
-    match astate with
-    | ISLLatentMemoryError _ -> 1.
-    | _ -> 0.
-  let memory_cardinal astate =
-    float_of_int (AbductiveDomain.Memory.cardinal astate)
-  let var_diff _ =
-    float_of_int (0) (* (AbductiveDomain.diff_stack_vars astate) *)
-  let skipped_calls _ =
-    float_of_int (0) (* (AbductiveDomain.skipped_calls astate) *)
-  let invalids _ =
-    float_of_int (0) (* (AbductiveDomain.num_of_invalids_post astate) *)
-  let allocated _ =
-    float_of_int (0) (* (AbductiveDomain.num_of_allocated_post astate) *)
-
   let is_in_oracle (astate: Domain.t) =
     match astate with
     | ContinueProgram astate -> PulseOperations.is_in_oracle astate
     | _ -> true
 
-  let score (vs: float list) (a: Domain.t) =
-    let get_state a =
-      match a with
-      | ContinueProgram astate -> (astate :> AbductiveDomain.t)
-      | ExitProgram astate
-      | AbortProgram astate
-      | ISLLatentMemoryError astate -> (astate :> AbductiveDomain.t)
-      | LatentAbortProgram {astate}
-        -> (astate :> AbductiveDomain.t)
-      | LatentInvalidAccess {astate} -> (astate :> AbductiveDomain.t)
-    in
-    let astate = get_state a in
-    let v1 _ = isContinue a in
-    let v2 _ = isExit a in
-    let v3 _ = isAbort a in
-    let v4 _ = isLatent a in
-    let v5 _ = isError a in
-    let v6 _ = memory_cardinal astate in
-    let v7 _ = var_diff astate in
-    let v8 _ = skipped_calls astate in
-    let v9 _ = invalids astate in
-    let v10 _ = allocated astate in
-    let vectors = [v1; v2; v3; v4; v5; v6; v7; v8; v9; v10] in
-    (* let rec debug_vectors vs =
-     *   match vs with
-     *   | [] -> L.d_printfln "]@\n"
-     *   | hd::tl ->
-     *      L.d_printfln "%f " (hd ());
-     *     debug_vectors tl
-     * in
-     * let _ =
-     *   L.d_printfln "* features: [ ";
-     *   debug_vectors vectors
-     * in *)
-    compute vs vectors 0.
 end
 
 module DisjunctiveAnalyzer =
-  AbstractInterpreter.MakeDisjunctive
+  AbstractInterpreter.MakeDisjunctiveML
     (PulseTransferFunctions)
     (struct
       let join_policy = `UnderApproximateAfter Config.pulse_max_disjuncts

@@ -2063,6 +2063,14 @@ and pulse_ml_parameters =
     ~in_help:InferCommand.[(Analyze, manual_generic)]
     "ML parameters"
 
+and pulse_train_mode =
+  CLOpt.mk_bool ~long:"pulse-train-mode" ~default:false
+    "Pulse train mode for ML."
+
+and pulse_join_select =
+  CLOpt.mk_bool ~long:"pulse-join-select" ~default:false
+    "Pulse join operator with recorded traces"
+
 and pure_by_default =
   CLOpt.mk_bool ~long:"pure-by-default" ~default:false
     "[Purity]Consider unknown functions to be pure by default"
@@ -3111,7 +3119,9 @@ and javac_classes_out = !javac_classes_out
 
 and job_id = !job_id
 
-and jobs = Option.fold !max_jobs ~init:!jobs ~f:min
+and jobs =
+  if !pulse_train_mode then 1
+  else Option.fold !max_jobs ~init:!jobs ~f:min
 
 and linter = !linter
 
@@ -3298,6 +3308,10 @@ and pulse_ml_parameters =
      |> List.map ~f:Float.of_string
      |> Option.some
   | None -> None
+
+and pulse_train_mode = !pulse_train_mode
+
+and pulse_join_select = !pulse_join_select
 
 and pure_by_default = !pure_by_default
 

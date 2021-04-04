@@ -41,6 +41,7 @@ type id =
   | TestDeterminatorReport
   | TestDeterminatorTempResults
   | TraceForML
+  | TrainingDataSet
 [@@deriving enumerate]
 
 type cleanup_action = Delete | Keep [@@deriving equal]
@@ -209,6 +210,11 @@ let of_id = function
       ; before_caching_capture= Delete }
   | TraceForML ->
       { rel_path= "trace"
+      ; kind= File
+      ; before_incremental_analysis= Keep
+      ; before_caching_capture= Keep }
+  | TrainingDataSet ->
+      { rel_path= "train.txt"
       ; kind= File
       ; before_incremental_analysis= Keep
       ; before_caching_capture= Keep }

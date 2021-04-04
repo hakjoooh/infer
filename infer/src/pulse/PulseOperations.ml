@@ -17,7 +17,7 @@ type t = AbductiveDomain.t
 
 let oracle = Hashtbl.create 1000
 let is_in_oracle (astate : t) =
-  if Dump.is_recording () then true
+  if Config.pulse_train_mode then true
   else 
     begin
       ( if Config.write_html then
@@ -31,8 +31,8 @@ let is_in_oracle (astate : t) =
 
 let oracle_loaded = ref false
 let oracle_is_loaded () =
-  L.debug Analysis Quiet "oracle_is_loaded is_recording: %s@\n" (string_of_bool (Dump.is_recording ()));
-  if Dump.is_recording () then true
+  L.debug Analysis Quiet "oracle_is_loaded is_recording: %s@\n" (string_of_bool Config.pulse_train_mode);
+  if Config.pulse_train_mode then true
   else !oracle_loaded
     
 let set_oracle (astates: (t, string option) Hashtbl.t) = 
@@ -497,7 +497,7 @@ let edges = Hashtbl.create 10000
 let list = Hashtbl.create 1000000
 
 let add i (a: t) (b: t) =
-  if Dump.is_recording () then
+  if Config.pulse_train_mode then
     if AbductiveDomain.equal a b then ()
     else if Hashtbl.mem edges b then
       begin
@@ -513,6 +513,15 @@ let add i (a: t) (b: t) =
 let transitions (a: t) (b: t) = 
   add None a b
                                 
+let get_astate: ExecutionDomain.t -> AbductiveDomain.t = function
+  | ContinueProgram astate -> astate
+  | ExitProgram astate
+  | AbortProgram astate
+  | LatentAbortProgram {astate}
+  | LatentInvalidAccess {astate}
+  | ISLLatentMemoryError astate ->
+      (astate :> AbductiveDomain.t)
+
 let transition (i: string option) (a: ExecutionDomain.t) (b: ExecutionDomain.t) = 
   match a, b with
   | (ContinueProgram a, ContinueProgram b) ->
@@ -521,11 +530,12 @@ let transition (i: string option) (a: ExecutionDomain.t) (b: ExecutionDomain.t) 
       L.debug Analysis Quiet "transition from@\n%a@\n" AbductiveDomain.pp a;
       L.debug Analysis Quiet "transition to@\n%a@\n" AbductiveDomain.pp b;
       add i a b
-  (* | (ContinueProgram a, AbortProgram b) ->
-   *     L.debug Analysis Quiet "transition from@\n%a@\n" AbductiveDomain.pp a;
-   *     L.debug Analysis Quiet "transition exit to@\n%a@\n" AbductiveDomain.pp (b: AbductiveDomain.summary :> AbductiveDomain.t);
-   *     add i a (b: AbductiveDomain.summary :> AbductiveDomain.t) *)
-  | _ -> ()
+  | _ ->
+      let a = get_astate a in
+      let b = get_astate b in
+      L.debug Analysis Quiet "not continue transition from@\n%a@\n" AbductiveDomain.pp a;
+      L.debug Analysis Quiet "not continue transition to@\n%a@\n" AbductiveDomain.pp b;
+      add i a b
 
 let reachable a visited =
   let rec iter a depth =
@@ -553,7 +563,7 @@ let reachable a visited =
 let dump diag astate = 
   L.debug Analysis Quiet "Error log@\n%s@\n" (Diagnostic.get_message diag);
   L.debug Analysis Quiet "dump try@\n";
-  if Dump.is_recording () then
+  if Config.pulse_train_mode then
     let set = Hashtbl.create 1000 in
     reachable astate set;
     set |>
@@ -561,10 +571,27 @@ let dump diag astate =
     Hashtbl.add_seq list
 
 let close () =
+  let size_set = Hashtbl.length list in
   print_endline ("final edges: "^(string_of_int (Hashtbl.length edges)));
-  print_endline ("final set: "^(string_of_int (Hashtbl.length list)));
+  print_endline ("final set: "^(string_of_int size_set));
+  let reachable = list in
   let list = Hashtbl.fold (fun k v lst -> (k,v)::lst) list [] in
-  Dump.dump list
+  Dump.finalize list;
+  if Config.pulse_train_mode then
+    let notoks =
+      Hashtbl.fold (fun k v lst ->
+          let vs = Hashtbl.fold (fun k _ lst -> k::lst) v [k] in
+          let vs = List.filter ~f:(fun e -> not (Hashtbl.mem reachable e)) vs in
+          vs@lst
+        ) edges []
+    in
+    Dump.finalize_for_training (fun println ->
+        List.iter list ~f:(fun (m,_) ->
+            let vector = MLVector.lazy_vector (AbductiveDomain.feature_vector m) in
+            println "%a %d" MLVector.pp vector 1);
+        List.iter notoks ~f:(fun m ->
+            let vector = MLVector.lazy_vector (AbductiveDomain.feature_vector m) in
+            println "%a %d" MLVector.pp vector 0))
 
 let () = Epilogues.register ~f:close ~description:"flushing dumps and closing dump file"
 

@@ -44,7 +44,19 @@ end
 module type DisjReady = sig
   module CFG : ProcCfg.S
 
-  module Domain : AbstractDomain.NoJoinNew
+  module Domain : AbstractDomain.NoJoin
+
+  type analysis_data
+
+  val exec_instr : Domain.t -> analysis_data -> CFG.Node.t -> Sil.instr -> Domain.t list
+
+  val pp_session_name : CFG.Node.t -> Format.formatter -> unit
+end
+
+module type DisjReadyWithML = sig
+  module CFG : ProcCfg.S
+
+  module Domain : AbstractDomain.NoJoinForML
 
   type analysis_data
 
@@ -52,6 +64,5 @@ module type DisjReady = sig
 
   val pp_session_name : CFG.Node.t -> Format.formatter -> unit
 
-  val score: float list -> Domain.t -> float
   val is_in_oracle: Domain.t -> bool
 end

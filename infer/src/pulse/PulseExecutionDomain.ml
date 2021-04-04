@@ -114,3 +114,9 @@ let get_astate : t -> AbductiveDomain.t = function
 let is_unsat_cheap exec_state = PathCondition.is_unsat_cheap (get_astate exec_state).path_condition
 
 type summary = AbductiveDomain.summary base_t [@@deriving compare, equal, yojson_of]
+
+(** feature vectors *)
+let feature_vector a =
+  let astate = get_astate a in
+  let vs = AbductiveDomain.feature_vector astate in
+  vs

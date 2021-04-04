@@ -124,45 +124,156 @@ struct
           List.exists not_in ~f:(fun disj_not_in -> T.Domain.leq ~lhs:disjunct ~rhs:disj_not_in)
           |> not )
 
-
-    let orig_join : bool -> t -> t -> t =
+    let join : t -> t -> t =
       let rec list_rev_append l1 l2 n =
         match l1 with hd :: tl when n > 0 -> list_rev_append tl (hd :: l2) (n - 1) | _ -> l2
       in
-      fun is_selective ->
-        if is_selective then 
-          fun lhs rhs ->
-            if phys_equal lhs rhs then lhs
-            else
-              let (`UnderApproximateAfter n) = DConfig.join_policy in
-              let lhs_length = List.length lhs in
-              let result = 
-                if lhs_length >= n then lhs else list_rev_append rhs lhs (n - lhs_length)
-              in
-              (** select by e-selector *)
-              let result_n = 
-                List.filter result ~f:T.is_in_oracle
-              in
-              ( if Config.write_html then
-                  let n1 = List.length result in
-                  let n2 = List.length result_n in
-                  let n = n1 - n2 in
-                  let diff = List.filter result ~f:(fun x -> not (List.mem result_n x ~equal:(fun x y -> T.Domain.similar ~lhs:x ~rhs:y))) in
-                  L.d_printfln "@]@\n@[Discards %d disjunct%s by selection@]" n (if Int.equal n 1 then "" else "s");
-                  List.iter diff ~f:(fun x -> L.d_printfln "@]@\n@[Discarded@]@\n%a" T.Domain.pp x)
-              ) ;
-                  
-              result_n
-        else 
-          fun lhs rhs ->
-            (** original join operation *)
-            if phys_equal lhs rhs then lhs
-            else
-              let (`UnderApproximateAfter n) = DConfig.join_policy in
-              let lhs_length = List.length lhs in
-              if lhs_length >= n then lhs else list_rev_append rhs lhs (n - lhs_length)
+      fun lhs rhs ->
+        if phys_equal lhs rhs then lhs
+        else
+          let (`UnderApproximateAfter n) = DConfig.join_policy in
+          let lhs_length = List.length lhs in
+          if lhs_length >= n then lhs else list_rev_append rhs lhs (n - lhs_length)
 
-    let top_k_join vectors : t -> t -> t =
+
+    (** check if elements of [disj] appear in [of_] in the same order, using pointer equality on
+        abstract states to compare elements quickly *)
+    let rec is_trivial_subset disj ~of_ =
+      match (disj, of_) with
+      | [], _ ->
+          true
+      | x :: disj', y :: of' when phys_equal x y ->
+          is_trivial_subset disj' ~of_:of'
+      | _, _ :: of' ->
+          is_trivial_subset disj ~of_:of'
+      | _, [] ->
+          false
+
+
+    let leq ~lhs ~rhs = phys_equal lhs rhs || is_trivial_subset lhs ~of_:rhs
+
+    (** Ignore states in [lhs] that are over-approximated in [rhs] and vice-versa. Favors keeping
+        states in [lhs]. *)
+    let join_up_to_imply lhs rhs =
+      let rev_rhs_not_in_lhs = rev_filter_not_over_approximated rhs ~not_in:lhs in
+      (* cheeky: this is only used in pulse, whose (<=) is actually a symmetric relation so there's
+         no need to filter out elements of [lhs] *)
+      join lhs rev_rhs_not_in_lhs
+
+
+    let widen ~prev ~next ~num_iters =
+      let (`UnderApproximateAfterNumIterations max_iter) = DConfig.widen_policy in
+      if phys_equal prev next then prev
+      else if num_iters > max_iter then (
+        L.d_printfln "Iteration %d is greater than max iter %d, stopping." num_iters max_iter ;
+        prev )
+      else
+        let post = join_up_to_imply prev next in
+        if leq ~lhs:post ~rhs:prev then prev else post
+
+
+    let pp f disjuncts =
+      let pp_disjuncts f disjuncts =
+        List.iteri disjuncts ~f:(fun i disjunct ->
+            F.fprintf f "#%d: @[%a@]@;" i T.Domain.pp disjunct )
+      in
+      F.fprintf f "@[<v>%d disjuncts:@;%a@]" (List.length disjuncts) pp_disjuncts disjuncts
+  end
+
+  let exec_instr pre_disjuncts analysis_data node instr =
+    List.foldi pre_disjuncts ~init:[] ~f:(fun i post_disjuncts pre_disjunct ->
+        let should_skip =
+          let (`UnderApproximateAfter n) = DConfig.join_policy in
+          List.length post_disjuncts >= n
+        in
+        (* TODO for ML by ysko.: It skips executing disjunctions when it reaches the limit. *)
+        if should_skip then (
+          L.d_printfln "@[<v2>Reached max disjuncts limit, skipping disjunct #%d@;@]" i ;
+          post_disjuncts )
+        else (
+          L.d_printfln "@[<v2>Executing instruction from disjunct #%d@;" i ;
+          let disjuncts' = T.exec_instr pre_disjunct analysis_data node instr in
+          ( if Config.write_html then
+            let n = List.length disjuncts' in
+            L.d_printfln "@]@\n@[Got %d disjunct%s back@]" n (if Int.equal n 1 then "" else "s") ) ;
+          Domain.join post_disjuncts disjuncts' ) )
+
+
+  let exec_node_instrs old_state_opt ~exec_instr pre instrs =
+    let is_new_pre disjunct =
+      match old_state_opt with
+      | None ->
+          true
+      | Some {State.pre= previous_pre; _} ->
+          not (List.mem ~equal:phys_equal previous_pre disjunct)
+    in
+    let current_post = match old_state_opt with None -> [] | Some {State.post; _} -> post in
+    List.foldi pre ~init:current_post ~f:(fun i post_disjuncts pre_disjunct ->
+        if is_new_pre pre_disjunct then (
+          L.d_printfln "@[<v2>Executing node from disjunct #%d@;" i ;
+          let disjuncts' = Instrs.fold ~init:[pre_disjunct] instrs ~f:exec_instr in
+          L.d_printfln "@]@\n" ;
+          Domain.join post_disjuncts disjuncts' )
+        else (
+          L.d_printfln "@[Skipping already-visited disjunct #%d@]@;" i ;
+          post_disjuncts ) )
+
+
+  let pp_session_name node f = T.pp_session_name node f
+end
+
+module MakeDisjunctiveTransferFunctionsML
+    (T : TransferFunctions.DisjReadyWithML)
+    (DConfig : TransferFunctions.DisjunctiveConfig) =
+struct
+  include MakeDisjunctiveTransferFunctions(T)(DConfig)
+
+  module Domain = struct
+    include Domain
+
+    let orig_join : t -> t -> t =
+      let rec list_rev_append l1 l2 n =
+        match l1 with hd :: tl when n > 0 -> list_rev_append tl (hd :: l2) (n - 1) | _ -> l2
+      in
+      fun lhs rhs ->
+        (** original join operation *)
+        if phys_equal lhs rhs then lhs
+        else
+          let (`UnderApproximateAfter n) = DConfig.join_policy in
+          let lhs_length = List.length lhs in
+          if lhs_length >= n then lhs else list_rev_append rhs lhs (n - lhs_length)
+
+
+    let select_join : t -> t -> t =
+      let rec list_rev_append l1 l2 n =
+        match l1 with hd :: tl when n > 0 -> list_rev_append tl (hd :: l2) (n - 1) | _ -> l2
+      in
+      fun lhs rhs ->
+      if phys_equal lhs rhs then lhs
+      else
+        let (`UnderApproximateAfter n) = DConfig.join_policy in
+        let lhs_length = List.length lhs in
+        let result = 
+          if lhs_length >= n then lhs else list_rev_append rhs lhs (n - lhs_length)
+        in
+        (** select by e-selector *)
+        let result_n = 
+          List.filter result ~f:T.is_in_oracle
+        in
+        ( if Config.write_html then
+            let n1 = List.length result in
+            let n2 = List.length result_n in
+            let n = n1 - n2 in
+            let diff = List.filter result ~f:(fun x -> not (List.mem result_n x ~equal:(fun x y -> T.Domain.similar ~lhs:x ~rhs:y))) in
+            L.d_printfln "@]@\n@[Discards %d disjunct%s by selection@]" n (if Int.equal n 1 then "" else "s");
+            List.iter diff ~f:(fun x -> L.d_printfln "@]@\n@[Discarded@]@\n%a" T.Domain.pp x)
+        ) ;
+        result_n
+
+
+
+    let top_k_join vector : t -> t -> t =
+      let vector = MLVector.vector vector in
       (** TODO: naive top-k selecting algorithm. we should revise it later. ***)
       (* let rec logr list score =
        *   match list, score with
@@ -218,7 +329,6 @@ struct
             (select sorted k)
       in
       (** until here ***)
-      let score = T.score vectors in
       let (`UnderApproximateAfter n) = DConfig.join_policy in
       fun lhs rhs ->
       if phys_equal lhs rhs then lhs
@@ -227,112 +337,30 @@ struct
         let len = List.length list in
         if len < n then list
         else 
-          let scores_list = List.map ~f:score list in
+          let scores_list = List.map ~f:(fun vs ->
+              T.Domain.feature_vector vs
+              |> MLVector.lazy_vector
+              |> MLVector.mult vector) list in
           (* log_param vectors; *)
           select_top_k list scores_list n
 
     let join : t -> t -> t =
       let (`MLParameters ml_policy) = DConfig.ml_policy in
-      match ml_policy with
-      | Some(_) -> 
-          (* top_k_join vectors *)
-          L.debug Analysis Quiet "join mode: %s@\n" (string_of_bool true);
-          orig_join true
-
-      | None -> 
-          L.debug Analysis Quiet "join mode: %s@\n" (string_of_bool false);
-          orig_join false
-
-    let join_widen : t -> t -> t =
-      let (`MLParameters ml_policy) = DConfig.ml_policy in
-      match ml_policy with
-      | Some(vectors) -> top_k_join vectors
-      | None -> orig_join false
-
-    (** check if elements of [disj] appear in [of_] in the same order, using pointer equality on
-        abstract states to compare elements quickly *)
-    let rec is_trivial_subset disj ~of_ =
-      match (disj, of_) with
-      | [], _ ->
-          true
-      | x :: disj', y :: of' when phys_equal x y ->
-          is_trivial_subset disj' ~of_:of'
-      | _, _ :: of' ->
-          is_trivial_subset disj ~of_:of'
-      | _, [] ->
-          false
-
-
-    let leq ~lhs ~rhs = phys_equal lhs rhs || is_trivial_subset lhs ~of_:rhs
-
-    (** Ignore states in [lhs] that are over-approximated in [rhs] and vice-versa. Favors keeping
-        states in [lhs]. *)
-    let join_up_to_imply lhs rhs =
-      let rev_rhs_not_in_lhs = rev_filter_not_over_approximated rhs ~not_in:lhs in
-      (* cheeky: this is only used in pulse, whose (<=) is actually a symmetric relation so there's
-         no need to filter out elements of [lhs] *)
-      join_widen lhs rev_rhs_not_in_lhs
-
-
-    let widen ~prev ~next ~num_iters =
-      let (`UnderApproximateAfterNumIterations max_iter) = DConfig.widen_policy in
-      if phys_equal prev next then prev
-      else if num_iters > max_iter then (
-        L.d_printfln "Iteration %d is greater than max iter %d, stopping." num_iters max_iter ;
-        prev )
-      else
-        let post = join_up_to_imply prev next in
-        if leq ~lhs:post ~rhs:prev then prev else post
-
-
-    let pp f disjuncts =
-      let pp_disjuncts f disjuncts =
-        List.iteri disjuncts ~f:(fun i disjunct ->
-            F.fprintf f "#%d: @[%a@]@;" i T.Domain.pp disjunct )
-      in
-      F.fprintf f "@[<v>%d disjuncts:@;%a@]" (List.length disjuncts) pp_disjuncts disjuncts
+      if Config.pulse_join_select then 
+        begin
+          L.debug Analysis Quiet "join mode: Selection by recorded trace@\n";
+          select_join
+        end
+      else 
+        match ml_policy with
+        | Some(vectors) -> 
+            begin
+              (* top_k_join vectors *)
+              L.debug Analysis Quiet "join mode: Selection by ML-parameters@\n";
+              top_k_join vectors
+            end
+        | None -> orig_join
   end
-
-  let exec_instr pre_disjuncts analysis_data node instr =
-    List.foldi pre_disjuncts ~init:[] ~f:(fun i post_disjuncts pre_disjunct ->
-        let should_skip =
-          let (`UnderApproximateAfter n) = DConfig.join_policy in
-          List.length post_disjuncts >= n
-        in
-        (* TODO: It skips executing disjunctions when it reaches the limit. *)
-        if should_skip then (
-          L.d_printfln "@[<v2>Reached max disjuncts limit, skipping disjunct #%d@;@]" i ;
-          post_disjuncts )
-        else (
-          L.d_printfln "@[<v2>Executing instruction from disjunct #%d@;" i ;
-          let disjuncts' = T.exec_instr pre_disjunct analysis_data node instr in
-          ( if Config.write_html then
-            let n = List.length disjuncts' in
-            L.d_printfln "@]@\n@[Got %d disjunct%s back@]" n (if Int.equal n 1 then "" else "s") ) ;
-          Domain.join post_disjuncts disjuncts' ) )
-
-
-  let exec_node_instrs old_state_opt ~exec_instr pre instrs =
-    let is_new_pre disjunct =
-      match old_state_opt with
-      | None ->
-          true
-      | Some {State.pre= previous_pre; _} ->
-          not (List.mem ~equal:phys_equal previous_pre disjunct)
-    in
-    let current_post = match old_state_opt with None -> [] | Some {State.post; _} -> post in
-    List.foldi pre ~init:current_post ~f:(fun i post_disjuncts pre_disjunct ->
-        if is_new_pre pre_disjunct then (
-          L.d_printfln "@[<v2>Executing node from disjunct #%d@;" i ;
-          let disjuncts' = Instrs.fold ~init:[pre_disjunct] instrs ~f:exec_instr in
-          L.d_printfln "@]@\n" ;
-          Domain.join post_disjuncts disjuncts' )
-        else (
-          L.d_printfln "@[Skipping already-visited disjunct #%d@]@;" i ;
-          post_disjuncts ) )
-
-
-  let pp_session_name node f = T.pp_session_name node f
 end
 
 module AbstractInterpreterCommon (TransferFunctions : NodeTransferFunctions) = struct
@@ -717,3 +745,8 @@ module MakeDisjunctive
     (T : TransferFunctions.DisjReady)
     (DConfig : TransferFunctions.DisjunctiveConfig) =
   MakeWTONode (MakeDisjunctiveTransferFunctions (T) (DConfig))
+
+module MakeDisjunctiveML
+    (T : TransferFunctions.DisjReadyWithML)
+    (DConfig : TransferFunctions.DisjunctiveConfig) =
+  MakeWTONode (MakeDisjunctiveTransferFunctionsML (T) (DConfig))

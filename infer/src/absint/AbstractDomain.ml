@@ -24,11 +24,12 @@ module type NoJoin = sig
   val leq : lhs:t -> rhs:t -> bool
 end
 
-module type NoJoinNew = sig
+module type NoJoinForML = sig
   include PrettyPrintable.PrintableType
 
   val leq : lhs:t -> rhs:t -> bool
-  val similar: lhs:t -> rhs:t -> bool
+  val similar : lhs:t -> rhs:t -> bool
+  val feature_vector : t -> float lazy_t list
 end
 
 module type S = sig

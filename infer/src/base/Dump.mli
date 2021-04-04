@@ -1,10 +1,9 @@
+module F = Format
 
-val dump : 'a list -> unit
-(** log debug info *)
-val is_recording: unit -> bool
 val is_replaying: unit -> bool
+val finalize : 'a list -> unit
+val finalize_for_training : ((('a, F.formatter, unit) format -> 'a) -> unit) -> unit
 
-(** log management *)
 
 val setup_dump_file : unit -> unit
 (** Set up logging to go to the log file. Call this once the results directory has been set up. *)

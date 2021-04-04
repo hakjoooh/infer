@@ -888,11 +888,11 @@ let incorporate_new_eqs new_eqs astate =
     | Sat (astate, Some (address, must_be_valid)) ->
         Error (`PotentialInvalidAccess (astate, address, must_be_valid))
 
-(*
+
 let diff_stack_vars astate =
   let prevars = BaseStack.cardinal (astate.pre :> base_domain).stack in
   let postvars = BaseStack.cardinal (astate.post :> base_domain).stack in
-  prevars - postvars
+  postvars - prevars
 
 let skipped_calls astate = SkippedCalls.cardinal astate.skipped_calls
 
@@ -926,8 +926,26 @@ let num_of_allocated_post astate =
       then i + 1
       else i)
     (astate.post :> BaseDomain.t).attrs 0
-*)
     
+let memory_cardinal astate =
+  float_of_int (Memory.cardinal astate)
+let var_diff astate =
+  float_of_int (diff_stack_vars astate)
+let skipped_calls astate =
+  float_of_int (skipped_calls astate)
+let invalids astate =
+  float_of_int (num_of_invalids_post astate)
+let allocated astate =
+  float_of_int (num_of_allocated_post astate)
+
+let feature_vector astate =
+  let v6 = lazy (memory_cardinal astate) in
+  let v7 = lazy (var_diff astate) in
+  let v8 = lazy (skipped_calls astate) in
+  let v9 = lazy (invalids astate) in
+  let v10 = lazy (allocated astate) in
+  [v6; v7; v8; v9; v10]
+
 module Topl = struct
   let small_step loc event astate =
     {astate with topl= PulseTopl.small_step loc astate.path_condition event astate.topl}
