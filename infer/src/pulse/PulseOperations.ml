@@ -525,16 +525,22 @@ let get_astate: ExecutionDomain.t -> AbductiveDomain.t = function
 let transition (i: string option) (a: ExecutionDomain.t) (b: ExecutionDomain.t) = 
   match a, b with
   | (ContinueProgram a, ContinueProgram b) ->
-      Option.iter i ~f:(fun x -> 
-          L.debug Analysis Quiet "instr - %s@\n" x);
-      L.debug Analysis Quiet "transition from@\n%a@\n" AbductiveDomain.pp a;
-      L.debug Analysis Quiet "transition to@\n%a@\n" AbductiveDomain.pp b;
+      if Config.debug_mode then
+        begin
+          Option.iter i ~f:(fun x -> 
+              L.debug Analysis Quiet "instr - %s@\n" x);
+          L.debug Analysis Quiet "transition from@\n%a@\n" AbductiveDomain.pp a;
+          L.debug Analysis Quiet "transition to@\n%a@\n" AbductiveDomain.pp b
+        end;          
       add i a b
   | _ ->
       let a = get_astate a in
       let b = get_astate b in
-      L.debug Analysis Quiet "not continue transition from@\n%a@\n" AbductiveDomain.pp a;
-      L.debug Analysis Quiet "not continue transition to@\n%a@\n" AbductiveDomain.pp b;
+      if Config.debug_mode then
+        begin
+          L.debug Analysis Quiet "not continue transition from@\n%a@\n" AbductiveDomain.pp a;
+          L.debug Analysis Quiet "not continue transition to@\n%a@\n" AbductiveDomain.pp b
+        end;
       add i a b
 
 let reachable a visited =
@@ -547,18 +553,24 @@ let reachable a visited =
         | Some s ->
             L.debug Analysis Quiet "found %d edges@\n" (Hashtbl.length s);
             Hashtbl.iter (fun a i ->
-                Option.iter i ~f:(fun x ->
-                    L.debug Analysis Quiet "instr to %s@\n" x);
-                L.debug Analysis Quiet "found - %d@\n%a@\n" depth AbductiveDomain.pp a;
+                if Config.debug_mode then
+                  begin
+                    Option.iter i ~f:(fun x ->
+                        L.debug Analysis Quiet "instr to %s@\n" x);
+                    L.debug Analysis Quiet "found - %d@\n%a@\n" depth AbductiveDomain.pp a
+                  end;
                 iter a (depth + 1)) s
         | None -> 
-            L.debug Analysis Quiet "found none edges@\n";
+            if Config.debug_mode then
+              L.debug Analysis Quiet "found none edges@\n";
             ()
       end
   in
-  L.debug Analysis Quiet "search start@\n%a@\n" AbductiveDomain.pp a;
+  if Config.debug_mode then
+    L.debug Analysis Quiet "search start@\n%a@\n" AbductiveDomain.pp a;
   iter a 0;
-  L.debug Analysis Quiet "reachable set: %s@\n" (string_of_int (Hashtbl.length visited))
+  if Config.debug_mode then
+    L.debug Analysis Quiet "reachable set: %s@\n" (string_of_int (Hashtbl.length visited))
 
 let dump diag astate = 
   L.debug Analysis Quiet "Error log@\n%s@\n" (Diagnostic.get_message diag);
