@@ -65,11 +65,11 @@ module GraphComparison = struct
   (** try to add the fact that [addr_lhs] corresponds to [addr_rhs] to the [mapping] *)
   let record_equal ~addr_lhs ~addr_rhs mapping =
     (* have we seen [addr_lhs] before?.. *)
-    let _ =
-      L.d_printfln "* mapping";
-      AddressMap.iter (fun k v ->
-          L.d_printfln "%a -> %a" AbstractValue.pp k AbstractValue.pp v) mapping.lhs_to_rhs;
-      L.d_printfln "* want to find %a" AbstractValue.pp addr_lhs in
+    (* let _ =
+     *   L.d_printfln "* mapping";
+     *   AddressMap.iter (fun k v ->
+     *       L.d_printfln "%a -> %a" AbstractValue.pp k AbstractValue.pp v) mapping.lhs_to_rhs;
+     *   L.d_printfln "* want to find %a" AbstractValue.pp addr_lhs in *)
     match AddressMap.find_opt addr_lhs mapping.lhs_to_rhs with
     | Some addr_rhs' when not (AbstractValue.equal addr_rhs addr_rhs') ->
         (* ...yes, but it was bound to another address *)
@@ -80,7 +80,7 @@ module GraphComparison = struct
           mapping ;
         `AliasingLHS
     | Some _addr_rhs (* [_addr_rhs = addr_rhs] *) ->
-          L.d_printfln "* already visited %a->%a" AbstractValue.pp addr_lhs AbstractValue.pp _addr_rhs;
+          (* L.d_printfln "* already visited %a->%a" AbstractValue.pp addr_lhs AbstractValue.pp _addr_rhs; *)
         `AlreadyVisited
     | None -> (
       (* ...and have we seen [addr_rhs] before?.. *)
@@ -95,7 +95,7 @@ module GraphComparison = struct
             pp_mapping mapping ;
           `AliasingRHS
       | None ->
-          L.d_printfln "* record %a<->%a" AbstractValue.pp addr_lhs AbstractValue.pp addr_rhs;
+          (* L.d_printfln "* record %a<->%a" AbstractValue.pp addr_lhs AbstractValue.pp addr_rhs; *)
           (* [addr_rhs] and [addr_lhs] are both new, record that they correspond to each other *)
           let mapping' =
             { rhs_to_lhs= AddressMap.add addr_rhs addr_lhs mapping.rhs_to_lhs

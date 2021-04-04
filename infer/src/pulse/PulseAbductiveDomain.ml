@@ -116,17 +116,17 @@ let similar ~lhs ~rhs =
          ~rhs:(rhs.pre :> BaseDomain.t)
      with
      | NotIsomorphic ->
-         let str1 = F.asprintf "%a" pp lhs in
-         let str2 = F.asprintf "%a" pp rhs in
-         (if Int.equal (String.length str1) (String.length str2) then
-            L.d_printfln "* similar?@\n lhs - %s@\n rhs - %s@\n" str1 str2);
+         (* let str1 = F.asprintf "%a" pp lhs in
+          * let str2 = F.asprintf "%a" pp rhs in *)
+         (* (if Int.equal (String.length str1) (String.length str2) then
+          *    L.d_printfln "* similar?@\n lhs - %s@\n rhs - %s@\n" str1 str2); *)
          false
      | IsomorphicUpTo foot_mapping ->
-       L.d_printfln "* first mapping@\n";
-         let _ =
-           AbstractValue.Map.iter (fun a b ->
-               L.d_printfln "* rewrite %a -> %a" AbstractValue.pp a AbstractValue.pp b) (BaseDomain.rhs_to_lhs foot_mapping)
-         in
+       (* L.d_printfln "* first mapping@\n"; *)
+         (* let _ =
+          *   AbstractValue.Map.iter (fun a b ->
+          *       L.d_printfln "* rewrite %a -> %a" AbstractValue.pp a AbstractValue.pp b) (BaseDomain.rhs_to_lhs foot_mapping)
+          * in *)
          match
            BaseDomain.isograph_map foot_mapping
              ~lhs:(lhs.post :> BaseDomain.t)
@@ -135,16 +135,16 @@ let similar ~lhs ~rhs =
          | NotIsomorphic -> false
          | IsomorphicUpTo foot_mapping ->
              (* TODO: mapping is not enough to unify PathCondition. *)
-             L.d_printfln "* second mapping@\n";
+             (* L.d_printfln "* second mapping@\n"; *)
              try 
                let rhs_to_lhs = BaseDomain.rhs_to_lhs foot_mapping in
-               let _ =
-                 AbstractValue.Map.iter (fun a b ->
-                     L.d_printfln "* rewrite %a -> %a" AbstractValue.pp a AbstractValue.pp b) rhs_to_lhs 
-               in
-               let _ = 
-                 L.d_printfln "similar but not equal@\n- lhs: %a@\n- rhs: %a@\n" pp lhs pp rhs
-               in
+               (* let _ =
+                *   AbstractValue.Map.iter (fun a b ->
+                *       L.d_printfln "* rewrite %a -> %a" AbstractValue.pp a AbstractValue.pp b) rhs_to_lhs 
+                * in *)
+               (* let _ = 
+                *   L.d_printfln "similar but not equal@\n- lhs: %a@\n- rhs: %a@\n" pp lhs pp rhs
+                * in *)
                (* let rhs_path_condition = PathCondition.subst_vars rhs_to_lhs rhs.path_condition in *)
                let lhs_path_condition = lhs.path_condition in
                let rhs_path_condition = rhs.path_condition in
@@ -158,9 +158,9 @@ let similar ~lhs ~rhs =
                 * let _ = L.d_printfln "* eliminated right: @\n%a@\n" PathCondition.pp rhs_path_condition in *)
                let rhs_path_condition = PathCondition.subst_vars rhs_to_lhs rhs_path_condition in
                let b = PathCondition.equal lhs_path_condition rhs_path_condition in
-               let _ = L.d_printfln "* rewritten test: %s@\n" (string_of_bool b) in
-               let _ = L.d_printfln "* compare left: @\n%a@\n" PathCondition.pp lhs_path_condition in
-               let _ = L.d_printfln "* compare right: @\n%a@\n" PathCondition.pp rhs_path_condition in
+               (* let _ = L.d_printfln "* rewritten test: %s@\n" (string_of_bool b) in
+                * let _ = L.d_printfln "* compare left: @\n%a@\n" PathCondition.pp lhs_path_condition in
+                * let _ = L.d_printfln "* compare right: @\n%a@\n" PathCondition.pp rhs_path_condition in *)
                b
              with _ -> false
 
