@@ -572,15 +572,19 @@ let reachable a visited =
   if Config.debug_mode then
     L.debug Analysis Quiet "reachable set: %s@\n" (string_of_int (Hashtbl.length visited))
 
+let diagnostics = Hashtbl.create 10000
+
 let dump diag astate = 
   L.debug Analysis Quiet "Error log@\n%s@\n" (Diagnostic.get_message diag);
   L.debug Analysis Quiet "dump try@\n";
   if Config.pulse_train_mode then
-    let set = Hashtbl.create 1000 in
-    reachable astate set;
-    set |>
-    Hashtbl.to_seq |> 
-    Hashtbl.add_seq list
+    if not (Hashtbl.mem diagnostics diag) then
+      let set = Hashtbl.create 1000 in
+      Hashtbl.add diagnostics diag ();
+      reachable astate set;
+      set |>
+      Hashtbl.to_seq |> 
+      Hashtbl.add_seq list
 
 let close () =
   let size_set = Hashtbl.length list in
@@ -597,13 +601,19 @@ let close () =
           vs@lst
         ) edges []
     in
+    let set_ok = List.fold_left list ~init:MLVector.Set.empty ~f:(fun set (m,_) ->
+        let vector = MLVector.lazy_vector (AbductiveDomain.feature_vector m) in
+        MLVector.Set.add vector set)
+    in
+    let set_notok = List.fold_left notoks ~init:MLVector.Set.empty ~f:(fun set m ->
+        let vector = MLVector.lazy_vector (AbductiveDomain.feature_vector m) in
+        MLVector.Set.add vector set)
+    in
     Dump.finalize_for_training (fun println ->
-        List.iter list ~f:(fun (m,_) ->
-            let vector = MLVector.lazy_vector (AbductiveDomain.feature_vector m) in
-            println "%a %d" MLVector.pp vector 1);
-        List.iter notoks ~f:(fun m ->
-            let vector = MLVector.lazy_vector (AbductiveDomain.feature_vector m) in
-            println "%a %d" MLVector.pp vector 0))
+        MLVector.Set.iter (fun vector ->
+            println "%a %d" MLVector.pp vector 1) set_ok;
+        MLVector.Set.iter (fun vector ->
+            println "%a %d" MLVector.pp vector 0) set_notok)
 
 let () = Epilogues.register ~f:close ~description:"flushing dumps and closing dump file"
 

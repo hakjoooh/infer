@@ -32,3 +32,22 @@ let mult (vs1: t) (vs2: t) =
 
 let vector vs = Vector vs
 let lazy_vector vs = LazyVector vs
+
+let compare e1 e2 =
+  let e1 =
+    match e1 with
+    | Vector vs1 -> vs1
+    | LazyVector vs1 -> List.map vs1 ~f:(fun x -> Lazy.force_val x)
+  in
+  let e2 =
+    match e2 with
+    | Vector vs1 -> vs1
+    | LazyVector vs1 -> List.map vs1 ~f:(fun x -> Lazy.force_val x)
+  in
+  List.compare Float.compare e1 e2
+
+module Key = struct
+  type nonrec t = t [@@deriving compare]
+end
+
+module Set = Caml.Set.Make(Key)

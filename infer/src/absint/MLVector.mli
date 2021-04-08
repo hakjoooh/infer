@@ -8,3 +8,5 @@ val mult : t -> t -> float
 
 val vector : float list -> t
 val lazy_vector : float lazy_t list -> t
+
+module Set : Caml.Set.S with type elt = t
