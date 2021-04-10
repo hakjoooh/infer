@@ -124,7 +124,7 @@ struct
           List.exists not_in ~f:(fun disj_not_in -> T.Domain.leq ~lhs:disjunct ~rhs:disj_not_in)
           |> not )
 
-    let join : t -> t -> t =
+    let join =
       let rec list_rev_append l1 l2 n =
         match l1 with hd :: tl when n > 0 -> list_rev_append tl (hd :: l2) (n - 1) | _ -> l2
       in
@@ -308,7 +308,6 @@ struct
         match (l1, l2) with
         | ([], _) | (_, []) -> []
         | (hd::tl, hd2::tl2) ->
-           (* select a head element as a pivot, which is bad. *)
            let x = hd2 in 
            let s1, l1, s2, l2 = partition (fun (y: float) -> Float.compare x y < 0) tl tl2 in
            let a1 = qsort s1 s2 in

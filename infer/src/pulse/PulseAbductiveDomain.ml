@@ -492,8 +492,6 @@ module Memory = struct
 
 
   let find_opt address astate = BaseMemory.find_opt address (astate.post :> base_domain).heap
-
-  let cardinal astate = BaseMemory.cardinal (astate.post :> base_domain).heap
 end
 
 let add_edge_on_src src location stack =
@@ -889,63 +887,6 @@ let incorporate_new_eqs new_eqs astate =
         Error (`PotentialInvalidAccess (astate, address, must_be_valid))
 
 
-let diff_stack_vars astate =
-  let prevars = BaseStack.cardinal (astate.pre :> base_domain).stack in
-  let postvars = BaseStack.cardinal (astate.post :> base_domain).stack in
-  postvars - prevars
-
-let skipped_calls astate = SkippedCalls.cardinal astate.skipped_calls
-
-(*
-    | AddressOfCppTemporary of Var.t * ValueHistory.t
-    | AddressOfStackVariable of Var.t * Location.t * ValueHistory.t
-    | Allocated of Procname.t * Trace.t
-    | Closure of Procname.t
-    | DynamicType of Typ.Name.t
-    | EndOfCollection
-    | Invalid of Invalidation.t * Trace.t
-    | ISLAbduced of Trace.t
-    | MustBeInitialized of Trace.t
-    | MustBeValid of Trace.t
-    | StdVectorReserve
-    | Uninitialized
-    | WrittenTo of Trace.t
- *)
-let num_of_invalids_post astate =
-  BaseAddressAttributes.fold (fun _ attrs i ->
-      if Attributes.get_invalid attrs
-         |> Option.is_some
-      then i + 1
-      else i)
-    (astate.post :> BaseDomain.t).attrs 0
-
-let num_of_allocated_post astate =
-  BaseAddressAttributes.fold (fun _ attrs i ->
-      if Attributes.get_allocation attrs
-         |> Option.is_some
-      then i + 1
-      else i)
-    (astate.post :> BaseDomain.t).attrs 0
-    
-let memory_cardinal astate =
-  float_of_int (Memory.cardinal astate)
-let var_diff astate =
-  float_of_int (diff_stack_vars astate)
-let skipped_calls astate =
-  float_of_int (skipped_calls astate)
-let invalids astate =
-  float_of_int (num_of_invalids_post astate)
-let allocated astate =
-  float_of_int (num_of_allocated_post astate)
-
-let feature_vector astate =
-  let v6 = lazy (memory_cardinal astate) in
-  let v7 = lazy (var_diff astate) in
-  let v8 = lazy (skipped_calls astate) in
-  let v9 = lazy (invalids astate) in
-  let v10 = lazy (allocated astate) in
-  [v6; v7; v8; v9; v10]
-
 module Topl = struct
   let small_step loc event astate =
     {astate with topl= PulseTopl.small_step loc astate.path_condition event astate.topl}
@@ -961,3 +902,17 @@ module Topl = struct
 
   let get {topl} = topl
 end
+
+(** for ML *)
+let diff_stack_vars astate =
+  let prevars = BaseStack.cardinal (astate.pre :> base_domain).stack in
+  let postvars = BaseStack.cardinal (astate.post :> base_domain).stack in
+  postvars - prevars
+
+let skipped_calls astate = SkippedCalls.cardinal astate.skipped_calls
+
+let feature_vector astate =
+  let post_vs = BaseDomain.feature_vector (astate.post :> BaseDomain.t) in
+  let v1 = lazy (diff_stack_vars astate) in
+  let v2 = lazy (skipped_calls astate) in
+  post_vs @ [v1; v2]

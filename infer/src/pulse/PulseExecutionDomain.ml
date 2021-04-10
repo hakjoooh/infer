@@ -118,5 +118,4 @@ type summary = AbductiveDomain.summary base_t [@@deriving compare, equal, yojson
 (** feature vectors *)
 let feature_vector a =
   let astate = get_astate a in
-  let vs = AbductiveDomain.feature_vector astate in
-  vs
+  AbductiveDomain.feature_vector astate

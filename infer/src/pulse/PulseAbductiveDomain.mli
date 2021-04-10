@@ -124,8 +124,6 @@ module Memory : sig
   val find_opt : AbstractValue.t -> t -> BaseMemory.Edges.t option
 
   val find_edge_opt : AbstractValue.t -> Access.t -> t -> (AbstractValue.t * ValueHistory.t) option
-
-  val cardinal: t -> int
 end
 
 (** attribute operations like {!BaseAddressAttributes} but that also take care of propagating facts
@@ -244,5 +242,5 @@ module Topl : sig
 end
 
 (** ML feature vectors *)
-val feature_vector : t -> float lazy_t list
+val feature_vector : t -> int lazy_t list
 

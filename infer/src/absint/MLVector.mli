@@ -1,5 +1,5 @@
 type t = Vector of float list
-       | LazyVector of float lazy_t list
+       | LazyVector of int lazy_t list
 
 val pp : Format.formatter -> t -> unit
 
@@ -7,6 +7,6 @@ val pp : Format.formatter -> t -> unit
 val mult : t -> t -> float
 
 val vector : float list -> t
-val lazy_vector : float lazy_t list -> t
+val lazy_vector : int lazy_t list -> t
 
 module Set : Caml.Set.S with type elt = t

@@ -2,15 +2,15 @@ module L = Logging
 module F = Format
 
 type t = Vector of float list
-       | LazyVector of float lazy_t list
+       | LazyVector of int lazy_t list
 
 let pp f vs =
   let vs =
     match vs with
-    | Vector vs -> vs
-    | LazyVector vsl -> List.map vsl ~f:Lazy.force_val
+    | Vector vs -> List.map vs ~f:Float.to_string
+    | LazyVector vsl -> List.map vsl ~f:(fun x -> x |> Lazy.force_val |> string_of_int)
   in
-  List.iter vs ~f:(fun x -> F.fprintf f "%s " (string_of_int (int_of_float x)))
+  List.iter vs ~f:(fun x -> F.fprintf f "%s " x)
 
 let rec compute vs1 vs2 acc =
   match vs1, vs2 with
@@ -21,7 +21,7 @@ let rec compute vs1 vs2 acc =
   | x::xs, y::ys ->
       let acc =
         if Float.equal x 0.0 then acc
-        else acc +. x *. (Lazy.force_val y)
+        else acc +. x *. (Lazy.force_val y |> float_of_int)
       in
       compute xs ys acc
 
@@ -37,12 +37,12 @@ let compare e1 e2 =
   let e1 =
     match e1 with
     | Vector vs1 -> vs1
-    | LazyVector vs1 -> List.map vs1 ~f:(fun x -> Lazy.force_val x)
+    | LazyVector vs1 -> List.map vs1 ~f:(fun x -> Lazy.force_val x |> float_of_int)
   in
   let e2 =
     match e2 with
     | Vector vs1 -> vs1
-    | LazyVector vs1 -> List.map vs1 ~f:(fun x -> Lazy.force_val x)
+    | LazyVector vs1 -> List.map vs1 ~f:(fun x -> Lazy.force_val x |> float_of_int)
   in
   List.compare Float.compare e1 e2
 

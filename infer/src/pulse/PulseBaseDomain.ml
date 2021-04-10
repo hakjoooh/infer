@@ -413,3 +413,28 @@ let subst_var subst ({heap; stack; attrs} as astate) =
   let attrs' = AddressAttributes.subst_var subst attrs in
   if phys_equal heap heap' && phys_equal stack stack' && phys_equal attrs attrs' then astate
   else {heap= heap'; stack= stack'; attrs= attrs'}
+
+(** for ML *)
+let num_of_invalids base =
+  AddressAttributes.fold (fun _ attrs i ->
+      if Attributes.get_invalid attrs
+         |> Option.is_some
+      then i + 1
+      else i)
+    base.attrs 0
+
+let num_of_allocated base =
+  AddressAttributes.fold (fun _ attrs i ->
+      if Attributes.get_allocation attrs
+         |> Option.is_some
+      then i + 1
+      else i)
+    base.attrs 0
+
+(* type t = {heap: Memory.t; stack: Stack.t; attrs: AddressAttributes.t} *)
+let feature_vector t =
+  let v1 = lazy (Memory.cardinal t.heap) in
+  let v2 = lazy (num_of_invalids t) in
+  let v3 = lazy (num_of_allocated t) in
+  [v1; v2; v3]
+
