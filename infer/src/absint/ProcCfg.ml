@@ -33,6 +33,8 @@ module type Node = sig
 
   val pp_id : F.formatter -> id -> unit
 
+  val feature_vector : t -> int lazy_t list
+
   module IdMap : PrettyPrintable.PPMap with type key = id
 
   module IdSet : PrettyPrintable.PPSet with type elt = id
@@ -59,6 +61,8 @@ module DefaultNode : Node with type t = Procdesc.Node.t and type id = Procdesc.N
 
   let pp_id = Procdesc.Node.pp_id
 
+  let feature_vector = Procdesc.Node.feature_vector
+                         
   module OrderedId = struct
     type t = id [@@deriving compare]
 
@@ -95,6 +99,8 @@ end = struct
 
   let pp_id fmt (id, index) = F.fprintf fmt "(%a: %d)" Procdesc.Node.pp_id id index
 
+  let feature_vector (t, _) = Procdesc.Node.feature_vector t
+                         
   module OrderedId = struct
     type t = id [@@deriving compare]
 

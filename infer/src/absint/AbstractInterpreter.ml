@@ -329,15 +329,21 @@ struct
       in
       (** until here ***)
       let (`UnderApproximateAfter n) = DConfig.join_policy in
-      fun _node lhs rhs ->
+      fun node lhs rhs ->
       if phys_equal lhs rhs then lhs
       else
         let list = lhs @ rhs in
         let len = List.length list in
         if len < n then list
         else 
+          let zi = lazy 0 in
+          let node_features =
+            match node with
+            | None -> [zi; zi; zi; zi; zi]
+            | Some(node) -> CFG.Node.feature_vector node
+          in
           let scores_list = List.map ~f:(fun vs ->
-              T.Domain.feature_vector vs
+              node_features @ T.Domain.feature_vector vs
               |> MLVector.lazy_vector
               |> MLVector.mult vector) list in
           (* log_param vectors; *)

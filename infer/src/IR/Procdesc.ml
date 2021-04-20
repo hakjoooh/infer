@@ -449,6 +449,69 @@ module Node = struct
     let succs = get_succs node in
     let preds = get_preds node in
     NodeKey.compute node ~simple_key ~succs ~preds
+
+  let feature_vector node = 
+    let v1 = lazy (match get_distance_to_exit node with Some(i) -> i | None -> 0) in
+    let v2 = 
+      lazy (match get_kind node with
+          | Start_node -> 1
+          | Exit_node -> 2
+          | Join_node -> 3
+          | Prune_node (true, _, _) -> 4
+          | Prune_node (false, _, _) -> 5
+          | Skip_node _ -> 6
+          | Stmt_node kind ->
+              match kind with
+              | AssertionFailure -> 7
+              | BetweenJoinAndExit -> 8
+              | BinaryConditionalStmtInit -> 9
+              | BinaryOperatorStmt _ -> 10
+              | Call _ -> 11
+              | CallObjCNew -> 12
+              | CaseStmt -> 13
+              | ClassCastException -> 14
+              | CompoundStmt -> 15
+              | ConditionalStmtBranch -> 16
+              | ConstructorInit -> 17
+              | CXXDynamicCast -> 18
+              | CXXNewExpr -> 19
+              | CXXStdInitializerListExpr -> 20
+              | CXXTemporaryMarkerSet -> 21
+              | CXXTry -> 22
+              | CXXTypeidExpr -> 23
+              | DeclStmt -> 24
+              | DefineBody -> 25
+              | Destruction _ -> 26
+              | ExceptionHandler -> 27
+              | ExceptionsSink -> 28
+              | ExprWithCleanups -> 29
+              | FinallyBranch -> 30
+              | GCCAsmStmt -> 31
+              | GenericSelectionExpr -> 32
+              | IfStmtBranch -> 33
+              | InitializeDynamicArrayLength -> 34
+              | InitListExp -> 35
+              | LoopBody -> 36
+              | MessageCall _ -> 37
+              | MethodBody -> 38
+              | MonitorEnter -> 39
+              | MonitorExit -> 40
+              | ObjCCPPThrow -> 41
+              | ObjCIndirectCopyRestoreExpr -> 42
+              | OutOfBound -> 43
+              | ReturnStmt -> 44
+              | Scope _ -> 45
+              | Skip _ -> 46
+              | SwitchStmt -> 47
+              | ThisNotNull -> 48
+              | Throw -> 49
+              | ThrowNPE -> 50
+              | UnaryOperator -> 51)
+    in
+    let v3 = lazy (Instrs.count (get_instrs node)) in
+    let v4 = lazy (List.length (get_preds node)) in
+    let v5 = lazy (List.length (get_succs node)) in
+    [v1; v2; v3; v4; v5]
 end
 
 (* =============== END of module Node =============== *)

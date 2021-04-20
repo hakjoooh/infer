@@ -189,6 +189,8 @@ module Node : sig
   val pp_stmt : Format.formatter -> stmt_nodekind -> unit
 
   val compute_key : t -> NodeKey.t
+
+  val feature_vector : t -> int lazy_t list
 end
 
 (** Map with node id keys. *)
