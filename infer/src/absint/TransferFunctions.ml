@@ -56,7 +56,9 @@ end
 module type DisjReadyWithML = sig
   module CFG : ProcCfg.S
 
-  module Domain : AbstractDomain.NoJoinForML
+  module Domain : sig
+    include AbstractDomain.NoJoinForML
+  end
 
   type analysis_data
 

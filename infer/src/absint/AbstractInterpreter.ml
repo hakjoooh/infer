@@ -93,6 +93,7 @@ module type NodeTransferFunctions = sig
     -> exec_instr:(Domain.t -> Sil.instr -> Domain.t)
     -> Domain.t
     -> _ Instrs.t
+    -> CFG.Node.t
     -> Domain.t
   (** specifies how to symbolically execute the instructions of a node, using [exec_instr] to go
       over a single instruction *)
@@ -102,7 +103,7 @@ end
 module SimpleNodeTransferFunctions (T : TransferFunctions.SIL) = struct
   include T
 
-  let exec_node_instrs _old_state_opt ~exec_instr pre instrs =
+  let exec_node_instrs _old_state_opt ~exec_instr pre instrs _node =
     Instrs.fold ~init:pre instrs ~f:exec_instr
 end
 
@@ -199,7 +200,7 @@ struct
           Domain.join post_disjuncts disjuncts' ) )
 
 
-  let exec_node_instrs old_state_opt ~exec_instr pre instrs =
+  let exec_node_instrs old_state_opt ~exec_instr pre instrs _node =
     let is_new_pre disjunct =
       match old_state_opt with
       | None ->
@@ -230,7 +231,6 @@ struct
 
   module Domain = struct
     include Domain
-
     let orig_join : t -> t -> t =
       let rec list_rev_append l1 l2 n =
         match l1 with hd :: tl when n > 0 -> list_rev_append tl (hd :: l2) (n - 1) | _ -> l2
@@ -272,7 +272,7 @@ struct
 
 
 
-    let top_k_join vector : t -> t -> t =
+    let top_k_join vector : CFG.Node.t option -> t -> t -> t =
       let vector = MLVector.vector vector in
       (** TODO: naive top-k selecting algorithm. we should revise it later. ***)
       (* let rec logr list score =
@@ -329,7 +329,7 @@ struct
       in
       (** until here ***)
       let (`UnderApproximateAfter n) = DConfig.join_policy in
-      fun lhs rhs ->
+      fun _node lhs rhs ->
       if phys_equal lhs rhs then lhs
       else
         let list = lhs @ rhs in
@@ -356,10 +356,64 @@ struct
             begin
               (* top_k_join vectors *)
               L.debug Analysis Quiet "join mode: Selection by ML-parameters@\n";
-              top_k_join vectors
+              top_k_join vectors None
             end
         | None -> orig_join
+
+    let sjoin =
+      let (`MLParameters ml_policy) = DConfig.ml_policy in
+      if Config.pulse_join_select then 
+        begin
+          L.debug Analysis Quiet "join mode: Selection by recorded trace@\n";
+          fun (_node: CFG.Node.t) -> select_join
+        end
+      else 
+        match ml_policy with
+        | Some(vectors) -> 
+            begin
+              (* top_k_join vectors *)
+              L.debug Analysis Quiet "join mode: Selection by ML-parameters@\n";
+              fun node -> top_k_join vectors (Some node)
+            end
+        | None -> fun _node -> orig_join
   end
+
+  let exec_instr pre_disjuncts analysis_data node instr =
+    List.foldi pre_disjuncts ~init:[] ~f:(fun i post_disjuncts pre_disjunct ->
+        let should_skip =
+          let (`UnderApproximateAfter n) = DConfig.join_policy in
+          List.length post_disjuncts >= n
+        in
+        (* TODO for ML by ysko.: It skips executing disjunctions when it reaches the limit. *)
+        if should_skip then (
+          L.d_printfln "@[<v2>Reached max disjuncts limit, skipping disjunct #%d@;@]" i ;
+          post_disjuncts )
+        else (
+          L.d_printfln "@[<v2>Executing instruction from disjunct #%d@;" i ;
+          let disjuncts' = T.exec_instr pre_disjunct analysis_data node instr in
+          ( if Config.write_html then
+            let n = List.length disjuncts' in
+            L.d_printfln "@]@\n@[Got %d disjunct%s back@]" n (if Int.equal n 1 then "" else "s") ) ;
+          Domain.sjoin node post_disjuncts disjuncts' ) )
+
+  let exec_node_instrs old_state_opt ~exec_instr pre instrs node =
+    let is_new_pre disjunct =
+      match old_state_opt with
+      | None ->
+          true
+      | Some {State.pre= previous_pre; _} ->
+          not (List.mem ~equal:phys_equal previous_pre disjunct)
+    in
+    let current_post = match old_state_opt with None -> [] | Some {State.post; _} -> post in
+    List.foldi pre ~init:current_post ~f:(fun i post_disjuncts pre_disjunct ->
+        if is_new_pre pre_disjunct then (
+          L.d_printfln "@[<v2>Executing node from disjunct #%d@;" i ;
+          let disjuncts' = Instrs.fold ~init:[pre_disjunct] instrs ~f:exec_instr in
+          L.d_printfln "@]@\n" ;
+          Domain.sjoin node post_disjuncts disjuncts' )
+        else (
+          L.d_printfln "@[Skipping already-visited disjunct #%d@]@;" i ;
+          post_disjuncts ) )
 end
 
 module AbstractInterpreterCommon (TransferFunctions : NodeTransferFunctions) = struct
@@ -466,7 +520,7 @@ module AbstractInterpreterCommon (TransferFunctions : NodeTransferFunctions) = s
     in
     (* hack to ensure that we call `exec_instr` on a node even if it has no instructions *)
     let instrs = if Instrs.is_empty instrs then Instrs.singleton Sil.skip_instr else instrs in
-    TransferFunctions.exec_node_instrs old_state_opt ~exec_instr pre instrs
+    TransferFunctions.exec_node_instrs old_state_opt ~exec_instr pre instrs node
 
 
   (* Note on narrowing operations: we defines the narrowing operations simply to take a smaller one.

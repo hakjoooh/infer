@@ -418,9 +418,18 @@ module PulseTransferFunctions = struct
 
 end
 
+module PulseTransferFunctionsML = struct
+  include PulseTransferFunctions
+      
+  module Domain = struct
+    include ExecutionDomain
+  end
+end
+
+
 module DisjunctiveAnalyzer =
   AbstractInterpreter.MakeDisjunctiveML
-    (PulseTransferFunctions)
+    (PulseTransferFunctionsML)
     (struct
       let join_policy = `UnderApproximateAfter Config.pulse_max_disjuncts
 
