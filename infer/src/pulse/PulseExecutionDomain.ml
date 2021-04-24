@@ -55,7 +55,7 @@ let leq ~lhs ~rhs =
   | _ ->
       false
 
-let similar ~lhs ~rhs =
+let similar lhs rhs =
   phys_equal lhs rhs
   ||
   match (lhs, rhs) with

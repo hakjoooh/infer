@@ -28,7 +28,7 @@ module type NoJoinForML = sig
   include PrettyPrintable.PrintableType
 
   val leq : lhs:t -> rhs:t -> bool
-  val similar : lhs:t -> rhs:t -> bool
+  val similar : t -> t -> bool
   val feature_vector : t -> int lazy_t list
 end
 

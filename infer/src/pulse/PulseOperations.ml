@@ -492,11 +492,12 @@ let mark_address_of_cpp_temporary history variable address astate =
 let mark_address_of_stack_variable history variable location address astate =
   AddressAttributes.add_one address (AddressOfStackVariable (variable, location, history)) astate
 
-(* out -> in set *)
+(* out -> in Hashtbl.t *)
 let edges = Hashtbl.create 10000
-let list = Hashtbl.create 1000000
+let list = Hashtbl.create 100000
+let features = Hashtbl.create 100000
 
-let add i (a: t) (b: t) =
+let add_transition i (a: t) (b: t) =
   if Config.pulse_train_mode then
     if AbductiveDomain.equal a b then ()
     else if Hashtbl.mem edges b then
@@ -510,9 +511,6 @@ let add i (a: t) (b: t) =
         Hashtbl.add edges b ntbl
       end
 
-let transitions (a: t) (b: t) = 
-  add None a b
-                                
 let get_astate: ExecutionDomain.t -> AbductiveDomain.t = function
   | ContinueProgram astate -> astate
   | ExitProgram astate
@@ -523,25 +521,16 @@ let get_astate: ExecutionDomain.t -> AbductiveDomain.t = function
       (astate :> AbductiveDomain.t)
 
 let transition (i: string option) (a: ExecutionDomain.t) (b: ExecutionDomain.t) = 
-  match a, b with
-  | (ContinueProgram a, ContinueProgram b) ->
-      if Config.debug_mode then
-        begin
-          Option.iter i ~f:(fun x -> 
-              L.debug Analysis Quiet "instr - %s@\n" x);
-          L.debug Analysis Quiet "transition from@\n%a@\n" AbductiveDomain.pp a;
-          L.debug Analysis Quiet "transition to@\n%a@\n" AbductiveDomain.pp b
-        end;          
-      add i a b
-  | _ ->
-      let a = get_astate a in
-      let b = get_astate b in
-      if Config.debug_mode then
-        begin
-          L.debug Analysis Quiet "not continue transition from@\n%a@\n" AbductiveDomain.pp a;
-          L.debug Analysis Quiet "not continue transition to@\n%a@\n" AbductiveDomain.pp b
-        end;
-      add i a b
+  (** TODO: ExecutionDomain *)
+  let aa = get_astate a in
+  let bb = get_astate b in
+  if Config.debug_mode then
+    begin
+      Option.iter i ~f:(L.debug Analysis Quiet "instr - %s@\n");
+      L.debug Analysis Quiet "transition from@\n%a@\n" ExecutionDomain.pp a;
+      L.debug Analysis Quiet "transition to@\n%a@\n" ExecutionDomain.pp b;
+    end;
+  add_transition i aa bb
 
 let reachable a visited =
   let rec iter a depth =
@@ -574,7 +563,9 @@ let reachable a visited =
 
 let diagnostics = Hashtbl.create 10000
 
-let dump diag astate = 
+let dump_traces_for_ml diag astate = 
+  (* TODO: All the abstract states reachable here is the ContinueProgram type. *) 
+  (* let astate = ContinueProgram astate in *)
   L.debug Analysis Quiet "Error log@\n%s@\n" (Diagnostic.get_message diag);
   L.debug Analysis Quiet "dump try@\n";
   if Config.pulse_train_mode then
@@ -634,7 +625,7 @@ let check_memory_leak_unreachable unreachable_addrs location astate =
     match allocated_not_freed_opt with
     | Some (procname, trace), false ->
         (* allocated but not freed *)
-        dump (Diagnostic.MemoryLeak {procname; location; allocation_trace= trace}) astate;
+        dump_traces_for_ml (Diagnostic.MemoryLeak {procname; location; allocation_trace= trace}) astate;
         L.debug Analysis Quiet "restore check: %s@\n" (string_of_bool (is_in_oracle astate));
         Error
           (ReportableError

@@ -264,7 +264,7 @@ struct
             let n1 = List.length result in
             let n2 = List.length result_n in
             let n = n1 - n2 in
-            let diff = List.filter result ~f:(fun x -> not (List.mem result_n x ~equal:(fun x y -> T.Domain.similar ~lhs:x ~rhs:y))) in
+            let diff = List.filter result ~f:(fun x -> not (List.mem result_n x ~equal:T.Domain.similar)) in
             L.d_printfln "@]@\n@[Discards %d disjunct%s by selection@]" n (if Int.equal n 1 then "" else "s");
             List.iter diff ~f:(fun x -> L.d_printfln "@]@\n@[Discarded@]@\n%a" T.Domain.pp x)
         ) ;
@@ -274,7 +274,7 @@ struct
 
     let top_k_join vector : CFG.Node.t option -> t -> t -> t =
       let vector = MLVector.vector vector in
-      (** TODO: naive top-k selecting algorithm. we should revise it later. ***)
+      (** TODO: naive top-k selecting algorithm. *)
       (* let rec logr list score =
        *   match list, score with
        *   | ([], _) | (_, []) -> ()
