@@ -5,6 +5,8 @@ val pp : Format.formatter -> t -> unit
 
 (** matrix multiplication of two vectors *)
 val mult : t -> t -> float
+val concat: t -> t -> t
+val equal: t -> t -> bool
 
 val vector : float list -> t
 val lazy_vector : int lazy_t list -> t

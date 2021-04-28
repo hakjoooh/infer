@@ -210,6 +210,6 @@ val get_captured_actuals :
 (** interfaces for ML *)
 val set_oracle: (t, string option) Caml.Hashtbl.t -> unit
 val oracle_is_loaded: unit -> bool
-val transition: string option -> ExecutionDomain.t -> ExecutionDomain.t -> unit
+val transition: string option -> MLVector.t option -> ExecutionDomain.t -> ExecutionDomain.t -> unit
 
 val is_in_oracle: t -> bool

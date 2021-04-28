@@ -497,19 +497,35 @@ let edges = Hashtbl.create 10000
 let list = Hashtbl.create 100000
 let features = Hashtbl.create 100000
 
-let add_transition i (a: t) (b: t) =
+let add_feature vs a =
+      match vs with
+      | Some (vs) ->
+          let ntbl = 
+            match Hashtbl.find_opt features a with
+            | Some(tbl) -> tbl
+            | None -> Hashtbl.create 100
+          in
+          Hashtbl.add ntbl vs ();
+          Hashtbl.add features a ntbl
+      | None -> ()
+  
+let add_transition i vs (a: t) (b: t) =
   if Config.pulse_train_mode then
-    if AbductiveDomain.equal a b then ()
-    else if Hashtbl.mem edges b then
-      begin
-        Hashtbl.add (Hashtbl.find edges b) a i
-      end
-    else
-      begin
-        let ntbl = Hashtbl.create 100 in
-        Hashtbl.add ntbl a i;
-        Hashtbl.add edges b ntbl
-      end
+    begin
+      add_feature vs a;
+      add_feature vs b;
+      if AbductiveDomain.equal a b then ()
+      else if Hashtbl.mem edges b then
+        begin
+          Hashtbl.add (Hashtbl.find edges b) a i
+        end
+      else
+        begin
+          let ntbl = Hashtbl.create 100 in
+          Hashtbl.add ntbl a i;
+          Hashtbl.add edges b ntbl
+        end
+    end
 
 let get_astate: ExecutionDomain.t -> AbductiveDomain.t = function
   | ContinueProgram astate -> astate
@@ -520,7 +536,7 @@ let get_astate: ExecutionDomain.t -> AbductiveDomain.t = function
   | ISLLatentMemoryError astate ->
       (astate :> AbductiveDomain.t)
 
-let transition (i: string option) (a: ExecutionDomain.t) (b: ExecutionDomain.t) = 
+let transition (i: string option) (vs: MLVector.t option) (a: ExecutionDomain.t) (b: ExecutionDomain.t) = 
   (** TODO: ExecutionDomain *)
   let aa = get_astate a in
   let bb = get_astate b in
@@ -530,14 +546,19 @@ let transition (i: string option) (a: ExecutionDomain.t) (b: ExecutionDomain.t) 
       L.debug Analysis Quiet "transition from@\n%a@\n" ExecutionDomain.pp a;
       L.debug Analysis Quiet "transition to@\n%a@\n" ExecutionDomain.pp b;
     end;
-  add_transition i aa bb
+  add_transition i vs aa bb
 
 let reachable a visited =
   let rec iter a depth =
     if Hashtbl.mem visited a then ()
     else 
       begin
-        Hashtbl.add visited a ();
+        let vs =
+          match Hashtbl.find_opt features a with
+          | Some (vs) -> vs
+          | None -> Hashtbl.create 1
+        in
+        Hashtbl.add visited a vs;
         match Hashtbl.find_opt edges a with
         | Some s ->
             L.debug Analysis Quiet "found %d edges@\n" (Hashtbl.length s);
@@ -581,30 +602,44 @@ let close () =
   let size_set = Hashtbl.length list in
   print_endline ("final edges: "^(string_of_int (Hashtbl.length edges)));
   print_endline ("final set: "^(string_of_int size_set));
-  let reachable = list in
+  let reachable = Seq.fold_left (fun lst s -> s::lst) [] (Hashtbl.to_seq_keys list) in
   let list = Hashtbl.fold (fun k v lst -> (k,v)::lst) list [] in
-  Dump.finalize list;
+  (* Dump.finalize list; *)
   if Config.pulse_train_mode then
     let notoks =
       Hashtbl.fold (fun k v lst ->
           let vs = Hashtbl.fold (fun k _ lst -> k::lst) v [k] in
-          let vs = List.filter ~f:(fun e -> not (Hashtbl.mem reachable e)) vs in
+          let vs = List.filter ~f:(fun e -> Option.is_none (List.find reachable ~f:(AbductiveDomain.equal e))) vs in
           vs@lst
         ) edges []
     in
-    let set_ok = List.fold_left list ~init:MLVector.Set.empty ~f:(fun set (m,_) ->
-        let vector = MLVector.lazy_vector (AbductiveDomain.feature_vector m) in
-        MLVector.Set.add vector set)
+    let set_ok = List.fold_left list ~init:MLVector.Set.empty ~f:(fun set (m,s) ->
+        Hashtbl.fold (fun k _ set -> 
+            let vector_node = k in
+            let vector_state = MLVector.lazy_vector (AbductiveDomain.feature_vector m) in
+            let vector = MLVector.concat vector_node vector_state in
+            MLVector.Set.add vector set) s set)
     in
     let set_notok = List.fold_left notoks ~init:MLVector.Set.empty ~f:(fun set m ->
-        let vector = MLVector.lazy_vector (AbductiveDomain.feature_vector m) in
-        MLVector.Set.add vector set)
+        let s =
+          match Hashtbl.find_opt features m with
+          | Some (s) -> s
+          | None -> Hashtbl.create 0
+        in
+        Hashtbl.fold (fun k _ set ->
+            let vector_node = k in
+            let vector_state = MLVector.lazy_vector (AbductiveDomain.feature_vector m) in
+            let vector = MLVector.concat vector_node vector_state in
+            MLVector.Set.add vector set) s set)
     in
     Dump.finalize_for_training (fun println ->
         MLVector.Set.iter (fun vector ->
-            println "%a %d" MLVector.pp vector 1) set_ok;
+            if not (MLVector.Set.mem vector set_notok) then println "%a %d" MLVector.pp vector 1) set_ok;
         MLVector.Set.iter (fun vector ->
-            println "%a %d" MLVector.pp vector 0) set_notok)
+            if MLVector.Set.mem vector set_ok then
+              println "%a %d" MLVector.pp vector 2
+            else 
+              println "%a %d" MLVector.pp vector 0) set_notok)
 
 let () = Epilogues.register ~f:close ~description:"flushing dumps and closing dump file"
 

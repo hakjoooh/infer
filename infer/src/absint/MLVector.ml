@@ -30,6 +30,17 @@ let mult (vs1: t) (vs2: t) =
   | Vector vs1, LazyVector vs2 -> compute vs1 vs2 0.
   | _ -> 0.
 
+let concat (vs1: t) (vs2: t) =
+  match vs1, vs2 with
+  | LazyVector vs1, LazyVector vs2 ->
+      LazyVector (vs1 @ vs2)
+  | _ -> assert false
+
+let equal (vs1: t) (vs2: t) =
+  match vs1, vs2 with
+  | LazyVector vs1, LazyVector vs2 -> List.equal (fun x y -> Int.equal (Lazy.force_val x) (Lazy.force_val y)) vs1 vs2
+  | _ -> assert false
+
 let vector vs = Vector vs
 let lazy_vector vs = LazyVector vs
 

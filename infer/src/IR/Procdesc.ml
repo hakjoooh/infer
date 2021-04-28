@@ -450,10 +450,22 @@ module Node = struct
     let preds = get_preds node in
     NodeKey.compute node ~simple_key ~succs ~preds
 
+  let i_to_b i n =
+    let rec iter k lst =
+      if Int.equal k 0 then lst
+      else 
+        let v =
+          if Int.equal k i then 1
+          else 0
+        in
+        iter (k-1) (lazy v::lst)
+    in
+    iter n []
+
   let feature_vector node = 
     let v1 = lazy (match get_distance_to_exit node with Some(i) -> i | None -> 0) in
     let v2 = 
-      lazy (match get_kind node with
+      match get_kind node with
           | Start_node -> 1
           | Exit_node -> 2
           | Join_node -> 3
@@ -506,12 +518,13 @@ module Node = struct
               | ThisNotNull -> 48
               | Throw -> 49
               | ThrowNPE -> 50
-              | UnaryOperator -> 51)
+              | UnaryOperator -> 51
     in
+    let vs2: int lazy_t list = i_to_b v2 51 in
     let v3 = lazy (Instrs.count (get_instrs node)) in
     let v4 = lazy (List.length (get_preds node)) in
     let v5 = lazy (List.length (get_succs node)) in
-    [v1; v2; v3; v4; v5]
+    [v1] @ vs2 @ [v3; v4; v5]
 end
 
 (* =============== END of module Node =============== *)

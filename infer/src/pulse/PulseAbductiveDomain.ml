@@ -912,7 +912,8 @@ let diff_stack_vars astate =
 let skipped_calls astate = SkippedCalls.cardinal astate.skipped_calls
 
 let feature_vector astate =
+  let pre_vs = BaseDomain.feature_vector (astate.pre :> BaseDomain.t) in
   let post_vs = BaseDomain.feature_vector (astate.post :> BaseDomain.t) in
   let v1 = lazy (diff_stack_vars astate) in
   let v2 = lazy (skipped_calls astate) in
-  post_vs @ [v1; v2]
+  pre_vs @ post_vs @ [v1; v2]

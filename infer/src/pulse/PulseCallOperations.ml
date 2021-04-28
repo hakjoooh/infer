@@ -231,7 +231,7 @@ let call_aux tenv caller_proc_desc call_loc callee_pname ret actuals callee_proc
             posts
         | Sat post ->
             (* transition: callee summary -> instantiated result *)
-            Result.iter post ~f:(fun pstate -> PulseOperations.transition None callee_exec_state pstate);
+            Result.iter post ~f:(fun pstate -> PulseOperations.transition None None callee_exec_state pstate);
             post :: posts )
 
 

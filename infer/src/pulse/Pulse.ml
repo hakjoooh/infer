@@ -404,7 +404,8 @@ module PulseTransferFunctions = struct
     let pp_node fmt node = node |> Procdesc.Node.pp fmt in
     let pp = Sil.pp_instr ~print_types:false Pp.text in
     let str = F.asprintf "%a - %a:%a" pp_proc cfg_node pp_node cfg_node pp instr in
-    List.iter outs ~f:(PulseOperations.transition (Some str) astate);
+    let vs = MLVector.lazy_vector (Procdesc.Node.feature_vector cfg_node) in
+    List.iter outs ~f:(PulseOperations.transition (Some str) (Some vs) astate);
     outs
 
 
@@ -480,7 +481,7 @@ let checker ({InterproceduralAnalysis.tenv; proc_desc; err_log} as analysis_data
             | [], [] -> ()
             | h1::tl1, Some(h2)::tl2 ->
                 (* at the end of the function. it creates a summary *)
-                PulseOperations.transition None h1 (h2: ExecutionDomain.summary :> ExecutionDomain.t);
+                PulseOperations.transition None None h1 (h2: ExecutionDomain.summary :> ExecutionDomain.t);
                 map tl1 tl2
             | _::tl1, None::tl2 -> map tl1 tl2
             | _ -> ()

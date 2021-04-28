@@ -415,6 +415,30 @@ let subst_var subst ({heap; stack; attrs} as astate) =
   else {heap= heap'; stack= stack'; attrs= attrs'}
 
 (** for ML *)
+let num_of_must_be_valid base =
+  AddressAttributes.fold (fun _ attrs i ->
+      if Attributes.get_must_be_valid attrs
+         |> Option.is_some
+      then i + 1
+      else i)
+    base.attrs 0
+
+let num_of_written_to base =
+  AddressAttributes.fold (fun _ attrs i ->
+      if Attributes.get_written_to attrs
+         |> Option.is_some
+      then i + 1
+      else i)
+    base.attrs 0
+
+let num_of_must_be_initialized base =
+  AddressAttributes.fold (fun _ attrs i ->
+      if Attributes.get_must_be_initialized attrs
+         |> Option.is_some
+      then i + 1
+      else i)
+    base.attrs 0
+
 let num_of_invalids base =
   AddressAttributes.fold (fun _ attrs i ->
       if Attributes.get_invalid attrs
@@ -434,7 +458,11 @@ let num_of_allocated base =
 (* type t = {heap: Memory.t; stack: Stack.t; attrs: AddressAttributes.t} *)
 let feature_vector t =
   let v1 = lazy (Memory.cardinal t.heap) in
-  let v2 = lazy (num_of_invalids t) in
-  let v3 = lazy (num_of_allocated t) in
-  [v1; v2; v3]
+  let v2 = lazy (num_of_must_be_valid t) in
+  let v3 = lazy (num_of_written_to t) in
+  let v4 = lazy (num_of_must_be_initialized t) in
+  let v5 = lazy (num_of_invalids t) in
+  let v6 = lazy (num_of_allocated t) in
+  let v7 = lazy (Stack.cardinal t.stack) in
+  [v1; v2; v3; v4; v5; v6; v7]
 
