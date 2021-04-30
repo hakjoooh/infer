@@ -634,11 +634,9 @@ let close () =
     in
     Dump.finalize_for_training (fun println ->
         MLVector.Set.iter (fun vector ->
-            if not (MLVector.Set.mem vector set_notok) then println "%a %d" MLVector.pp vector 1) set_ok;
+            println "%a %d" MLVector.pp vector 1) set_ok;
         MLVector.Set.iter (fun vector ->
-            if MLVector.Set.mem vector set_ok then
-              println "%a %d" MLVector.pp vector 2
-            else 
+            if not (MLVector.Set.mem vector set_ok) then
               println "%a %d" MLVector.pp vector 0) set_notok)
 
 let () = Epilogues.register ~f:close ~description:"flushing dumps and closing dump file"
