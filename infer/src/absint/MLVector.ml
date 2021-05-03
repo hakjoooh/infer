@@ -57,6 +57,11 @@ let compare e1 e2 =
   in
   List.compare Float.compare e1 e2
 
+let to_list (vs: t): int list =
+  match vs with
+  | Vector vs -> List.map vs ~f:(int_of_float)
+  | LazyVector vs -> List.map vs ~f:(fun x -> Lazy.force_val x)
+
 module Key = struct
   type nonrec t = t [@@deriving compare]
 end

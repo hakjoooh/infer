@@ -251,6 +251,12 @@ let invalidate_changed_procedures changed_files =
 
 
 let main ~changed_files =
+  Py.initialize ();
+  ignore (Py.Run.eval ~start:Py.File "
+# should load the trained model here.
+def score(m):
+    return sum(m) * 1.0
+");
   let start = ExecutionDuration.counter () in
   register_active_checkers () ;
   if not Config.continue_analysis then

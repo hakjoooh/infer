@@ -273,7 +273,7 @@ struct
 
 
     let top_k_join vector : CFG.Node.t option -> t -> t -> t =
-      let vector = MLVector.vector vector in
+      let _ = MLVector.vector vector in
       (** TODO: naive top-k selecting algorithm. *)
       (* let rec logr list score =
        *   match list, score with
@@ -336,17 +336,20 @@ struct
         let len = List.length list in
         if len < n then list
         else 
-          let zi = lazy 0 in
+          (* let zi = lazy 0 in *)
           let node_features =
             match node with
-            | None -> [zi; zi; zi; zi; zi]
+            | None -> raise (Invalid_argument "error")
             | Some(node) -> CFG.Node.feature_vector node
           in
+          let fn_score = Py.Callable.to_function (Py.Run.eval "score") in
           let scores_list = List.map ~f:(fun vs ->
-              node_features @ T.Domain.feature_vector vs
-              |> MLVector.lazy_vector
-              |> MLVector.mult vector) list in
-          (* log_param vectors; *)
+              let x = node_features @ T.Domain.feature_vector vs |> MLVector.lazy_vector in
+              let lst = MLVector.to_list x in
+              let lst = [| Py.List.of_list_map Py.Int.of_int lst |] in
+              let result = fn_score lst in
+              Py.Float.to_float result
+            ) list in
           select_top_k list scores_list n
 
     let join : t -> t -> t =

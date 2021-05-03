@@ -14,7 +14,6 @@ open PulseDomainInterface
 
 type t = AbductiveDomain.t
 
-
 let oracle = Hashtbl.create 1000
 let is_in_oracle (astate : t) =
   if Config.pulse_train_mode then true
@@ -604,8 +603,9 @@ let close () =
   print_endline ("final set: "^(string_of_int size_set));
   let reachable = Seq.fold_left (fun lst s -> s::lst) [] (Hashtbl.to_seq_keys list) in
   let list = Hashtbl.fold (fun k v lst -> (k,v)::lst) list [] in
+  print_endline ("computed reachable: "^(string_of_int (List.length reachable)));
   (* Dump.finalize list; *)
-  if Config.pulse_train_mode then
+  if Config.pulse_train_mode then (* need to optimize *)
     let notoks =
       Hashtbl.fold (fun k v lst ->
           let vs = Hashtbl.fold (fun k _ lst -> k::lst) v [k] in

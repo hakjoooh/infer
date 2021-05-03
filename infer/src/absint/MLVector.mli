@@ -10,5 +10,5 @@ val equal: t -> t -> bool
 
 val vector : float list -> t
 val lazy_vector : int lazy_t list -> t
-
+val to_list : t -> int list
 module Set : Caml.Set.S with type elt = t
