@@ -254,8 +254,41 @@ let main ~changed_files =
   Py.initialize ();
   ignore (Py.Run.eval ~start:Py.File "
 # should load the trained model here.
+import numpy as np
+from sklearn.neural_network import MLPClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.gaussian_process import GaussianProcessClassifier
+from sklearn.gaussian_process.kernels import RBF
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.naive_bayes import GaussianNB
+import sys
+import subprocess
+import random
+import time
+import pickle
+
+clf = pickle.load(open('./model', 'rb'))
+
+def classify (x):
+    pred = clf.predict ([x])
+    if hasattr(clf, 'decision_function'):
+        prob = clf.decision_function([x])
+    elif hasattr (clf, 'predict_prob'):
+        prob = clf.predict_prob([x])
+        if pred == 1:
+            prob = np.array ([list(prob)[0][0]])
+        else:
+            prob = np.array ([list(prob)[0][1]])
+    else:
+        prob = [0]
+    return pred[0], prob[0]
+
 def score(m):
-    return sum(m) * 1.0
+    pred, prob = classify(m)
+    return 5+prob
 ");
   let start = ExecutionDuration.counter () in
   register_active_checkers () ;
