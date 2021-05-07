@@ -251,8 +251,10 @@ let invalidate_changed_procedures changed_files =
 
 
 let main ~changed_files =
-  Py.initialize ();
-  ignore (Py.Run.eval ~start:Py.File "
+  if PolyVariantEqual.(Sys.file_exists "./model" `Yes) then
+    begin
+      Py.initialize ();
+      ignore (Py.Run.eval ~start:Py.File "
 # should load the trained model here.
 import numpy as np
 from sklearn.neural_network import MLPClassifier
@@ -290,6 +292,7 @@ def score(m):
     pred, prob = classify(m)
     return 5+prob
 ");
+    end;
   let start = ExecutionDuration.counter () in
   register_active_checkers () ;
   if not Config.continue_analysis then
