@@ -251,7 +251,7 @@ let invalidate_changed_procedures changed_files =
 
 
 let main ~changed_files =
-  if PolyVariantEqual.(Sys.file_exists "./model" = `Yes) then
+  if PolyVariantEqual.( = ) (Sys.file_exists "./model") `Yes then
     begin
       Py.initialize ();
       ignore (Py.Run.eval ~start:Py.File "
