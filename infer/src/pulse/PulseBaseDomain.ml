@@ -111,10 +111,8 @@ module GraphComparison = struct
   (** can we extend [mapping] so that the subgraph of [lhs] rooted at [addr_lhs] is isomorphic to
       the subgraph of [rhs] rooted at [addr_rhs]? *)
   let rec isograph_map_from_address ~lhs ~addr_lhs ~rhs ~addr_rhs mapping =
-    L.d_printfln "%a<->%a@\n" AbstractValue.pp addr_lhs AbstractValue.pp addr_rhs ;
     match record_equal mapping ~addr_lhs ~addr_rhs with
     | `AlreadyVisited -> (
-        L.d_printfln "already visited";
         let get_non_empty_cell addr astate =
           find_cell_opt addr astate
           |> Option.filter ~f:(fun (edges, attrs) ->
@@ -126,41 +124,24 @@ module GraphComparison = struct
         let rhs_cell_opt = get_non_empty_cell addr_rhs rhs in
         match (lhs_cell_opt, rhs_cell_opt) with
         | None, None ->
-            L.d_printfln "keep";
             IsomorphicUpTo mapping
         | Some _, None ->
-            L.d_printfln "notiso1 %a %a" AbstractValue.pp addr_lhs AbstractValue.pp addr_rhs;
             NotIsomorphic
         | None, Some _ ->
-            L.d_printfln "notiso2 %a %a" AbstractValue.pp addr_lhs AbstractValue.pp addr_rhs;
             NotIsomorphic
         | Some (edges_lhs, attrs_lhs), Some (edges_rhs, attrs_rhs) ->
             (* continue the comparison recursively on all edges and attributes *)
             L.d_printfln "continue to edges";
             if Attributes.equal attrs_lhs attrs_rhs then
-begin
               let bindings_lhs = Memory.Edges.bindings edges_lhs in
               let bindings_rhs = Memory.Edges.bindings edges_rhs in
-              L.d_printfln "check attr left";
-              List.iter bindings_lhs ~f:(fun (acc,trace) ->
-                  L.d_printfln "- %a - %a" Memory.Access.pp acc Memory.AddrTrace.pp trace
-                ) ;
-              L.d_printfln "check attr right";
-              List.iter bindings_rhs ~f:(fun (acc,trace) ->
-                  L.d_printfln "- %a - %a" Memory.Access.pp acc Memory.AddrTrace.pp trace
-                ) ;
               isograph_map_edges ~lhs ~edges_lhs:bindings_lhs ~rhs ~edges_rhs:bindings_rhs mapping
-end
             else
-begin
-              L.d_printfln "notiso";
-              NotIsomorphic 
-end)
+              NotIsomorphic)
         (* IsomorphicUpTo mapping *)
     | `AliasingRHS | `AliasingLHS ->
         NotIsomorphic
     | `NotAlreadyVisited mapping -> (
-        L.d_printfln "new visited with recorded";
         let get_non_empty_cell addr astate =
           find_cell_opt addr astate
           |> Option.filter ~f:(fun (edges, attrs) ->
@@ -172,37 +153,19 @@ end)
         let rhs_cell_opt = get_non_empty_cell addr_rhs rhs in
         match (lhs_cell_opt, rhs_cell_opt) with
         | None, None ->
-            L.d_printfln "keep";
             IsomorphicUpTo mapping
         | Some _, None ->
-            L.d_printfln "notiso1 %a %a" AbstractValue.pp addr_lhs AbstractValue.pp addr_rhs;
             NotIsomorphic
         | None, Some _ ->
-            L.d_printfln "notiso2 %a %a" AbstractValue.pp addr_lhs AbstractValue.pp addr_rhs;
             NotIsomorphic
         | Some (edges_lhs, attrs_lhs), Some (edges_rhs, attrs_rhs) ->
             (* continue the comparison recursively on all edges and attributes *)
-            L.d_printfln "continue to edges";
             if Attributes.equal attrs_lhs attrs_rhs then
-begin
               let bindings_lhs = Memory.Edges.bindings edges_lhs in
               let bindings_rhs = Memory.Edges.bindings edges_rhs in
-              L.d_printfln "check attr left";
-              List.iter bindings_lhs ~f:(fun (acc,trace) ->
-                  L.d_printfln "- %a - %a" Memory.Access.pp acc Memory.AddrTrace.pp trace
-                ) ;
-              L.d_printfln "check attr right";
-              List.iter bindings_rhs ~f:(fun (acc,trace) ->
-                  L.d_printfln "- %a - %a" Memory.Access.pp acc Memory.AddrTrace.pp trace
-                ) ;
               isograph_map_edges ~lhs ~edges_lhs:bindings_lhs ~rhs ~edges_rhs:bindings_rhs mapping
-end
             else
-begin
-              L.d_printfln "notiso";
-              NotIsomorphic 
-end
-)
+              NotIsomorphic)
             
 
   (** check that the isograph relation can be extended for all edges *)
@@ -214,7 +177,6 @@ end
     | (a_lhs, (addr_lhs, _trace_lhs)) :: edges_lhs, (a_rhs, (addr_rhs, _trace_rhs)) :: edges_rhs
       when Memory.Access.equal a_lhs a_rhs -> (
       (* check isograph relation from the destination addresses *)
-        L.d_printfln "continue to address %a %a" AbstractValue.pp addr_lhs AbstractValue.pp addr_rhs;
       match isograph_map_from_address ~lhs ~addr_lhs ~rhs ~addr_rhs mapping with
       | IsomorphicUpTo mapping ->
           (* ok: continue with the other edges *)
@@ -236,41 +198,19 @@ end
         IsomorphicUpTo mapping
     | (var_lhs, (addr_lhs, _trace_lhs)) :: stack_lhs, (var_rhs, (addr_rhs, _trace_rhs)) :: stack_rhs
       when Var.equal var_lhs var_rhs -> (
-        L.d_printfln "from stack %a <-> %a: %a<-%a@\n" Var.pp var_lhs Var.pp var_rhs AbstractValue.pp addr_lhs AbstractValue.pp addr_rhs ;
-        (* L.d_printfln "<->"; *)
       match isograph_map_from_address ~lhs ~addr_lhs ~rhs ~addr_rhs mapping with
       | IsomorphicUpTo mapping ->
-          (* L.d_printfln "go recursive"; *)
           isograph_map_from_stack ~lhs ~stack_lhs ~rhs ~stack_rhs mapping
       | NotIsomorphic ->
-        (* L.d_printfln "not iso"; *)
           NotIsomorphic )
     | _ :: _, _ :: _ | [], _ :: _ | _ :: _, [] ->
-        (* L.d_printfln "not isomorphic"; *)
         NotIsomorphic
 
 
   let isograph_map ~lhs ~rhs mapping =
-    L.d_printfln "stack checks";
     let stack_lhs = Stack.bindings lhs.stack in
     let stack_rhs = Stack.bindings rhs.stack in
-    (* let rec temp lhs rhs =
-     *   match lhs, rhs with
-     *   | [], [] -> ()
-     *   | (var_lhs,_)::lhs, (var_rhs,_)::rhs ->
-     *       L.d_printfln "stack check  %a <-> %a@\n" Var.pp var_lhs Var.pp var_rhs;
-     *       temp lhs rhs
-     *   | _ -> ()
-     * in *)
-    (* L.d_printfln "stack checks";
-     * temp stack_lhs stack_rhs; *)
-    let r = isograph_map_from_stack ~lhs ~rhs ~stack_lhs ~stack_rhs mapping in
-    begin
-      match r with
-      | IsomorphicUpTo _ -> L.d_printfln "found a mapping"
-      | NotIsomorphic -> L.d_printfln "failed to find a mapping"
-    end;
-    r
+    isograph_map_from_stack ~lhs ~rhs ~stack_lhs ~stack_rhs mapping
 
 
   let is_isograph ~lhs ~rhs mapping =

@@ -336,10 +336,14 @@ struct
         let len = List.length list in
         if len < n then list
         else 
-          (* let zi = lazy 0 in *)
+          let zi = lazy 0 in
+          let rec gen i lst =
+            if Int.equal i 0 then lst
+            else gen (i-1) (zi::lst)
+          in
           let node_features =
             match node with
-            | None -> raise (Invalid_argument "error")
+            | None -> gen 55 []
             | Some(node) -> CFG.Node.feature_vector node
           in
           let fn_score = Py.Callable.to_function (Py.Run.eval "score") in
