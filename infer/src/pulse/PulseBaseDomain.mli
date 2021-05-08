@@ -41,8 +41,6 @@ val pp : F.formatter -> t -> unit
 
 val subst_var : AbstractValue.t * AbstractValue.t -> t -> t SatUnsat.t
 val rhs_to_lhs : mapping -> AbstractValue.t AbstractValue.Map.t
-val lhs_to_rhs : mapping -> AbstractValue.t AbstractValue.Map.t
-val rev_mapping : mapping -> mapping
 
 
 (** ML feature vectors *)
