@@ -598,14 +598,14 @@ let dump_traces_for_ml diag astate =
       Hashtbl.add_seq list
 
 let close () =
-  let size_set = Hashtbl.length list in
-  print_endline ("final edges: "^(string_of_int (Hashtbl.length edges)));
-  print_endline ("final set: "^(string_of_int size_set));
-  let reachable = Seq.fold_left (fun lst s -> s::lst) [] (Hashtbl.to_seq_keys list) in
-  let list = Hashtbl.fold (fun k v lst -> (k,v)::lst) list [] in
-  print_endline ("computed reachable: "^(string_of_int (List.length reachable)));
   (* Dump.finalize list; *)
   if Config.pulse_train_mode then (* need to optimize *)
+    let size_set = Hashtbl.length list in
+    print_endline ("final edges: "^(string_of_int (Hashtbl.length edges)));
+    print_endline ("final set: "^(string_of_int size_set));
+    let reachable = Seq.fold_left (fun lst s -> s::lst) [] (Hashtbl.to_seq_keys list) in
+    let list = Hashtbl.fold (fun k v lst -> (k,v)::lst) list [] in
+    print_endline ("computed reachable: "^(string_of_int (List.length reachable)));
     let notoks =
       Hashtbl.fold (fun k v lst ->
           let vs = Hashtbl.fold (fun k _ lst -> k::lst) v [k] in

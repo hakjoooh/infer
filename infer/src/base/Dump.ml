@@ -36,14 +36,14 @@ let read ~f =
   else
     None
 
-let load_dump_file () =
-  let x = Sys.file_exists logfile_path in
-  let preexisting_file = PolyVariantEqual.( = ) x `Yes in
-  if preexisting_file then
-    begin
-      L.debug Analysis Quiet "loading traces.@\n";
-      replay_mode := true
-    end
+(* let load_dump_file () =
+ *   let x = Sys.file_exists logfile_path in
+ *   let preexisting_file = PolyVariantEqual.( = ) x `Yes in
+ *   if preexisting_file then
+ *     begin
+ *       L.debug Analysis Quiet "loading traces.@\n";
+ *       replay_mode := true
+ *     end *)
 
 let setup_dump_file () =
   if Config.pulse_train_mode then
@@ -61,5 +61,5 @@ let setup_dump_file () =
       in
       trace_file := Some (chan)
     end
-  else 
-    load_dump_file ()
+  (* else 
+   *   load_dump_file () *)
