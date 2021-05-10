@@ -599,45 +599,41 @@ let dump_traces_for_ml diag astate =
 
 let close () =
   (* Dump.finalize list; *)
-  if Config.pulse_train_mode then (* need to optimize *)
-    let size_set = Hashtbl.length list in
-    print_endline ("final edges: "^(string_of_int (Hashtbl.length edges)));
-    print_endline ("final set: "^(string_of_int size_set));
-    let reachable = Seq.fold_left (fun lst s -> s::lst) [] (Hashtbl.to_seq_keys list) in
-    let list = Hashtbl.fold (fun k v lst -> (k,v)::lst) list [] in
-    print_endline ("computed reachable: "^(string_of_int (List.length reachable)));
+  if Config.pulse_train_mode then
+    let is_reachable s = Hashtbl.mem list s in
+    let list = Hashtbl.to_seq list in
     let notoks =
       Hashtbl.fold (fun k v lst ->
-          let vs = Hashtbl.fold (fun k _ lst -> k::lst) v [k] in
-          let vs = List.filter ~f:(fun e -> Option.is_none (List.find reachable ~f:(AbductiveDomain.equal e))) vs in
-          vs@lst
-        ) edges []
+          Seq.cons k (Hashtbl.to_seq_keys v)
+          |> Seq.filter (fun e -> not (is_reachable e))
+          |> Seq.append lst
+        ) edges Seq.empty
     in
-    let set_ok = List.fold_left list ~init:MLVector.Set.empty ~f:(fun set (m,s) ->
+    let set_ok =
+      Seq.fold_left (fun set (m,s) ->
         Hashtbl.fold (fun k _ set -> 
-            let vector_node = k in
             let vector_state = MLVector.lazy_vector (AbductiveDomain.feature_vector m) in
-            let vector = MLVector.concat vector_node vector_state in
-            MLVector.Set.add vector set) s set)
-    in
-    let set_notok = List.fold_left notoks ~init:MLVector.Set.empty ~f:(fun set m ->
+            let vector = MLVector.concat k vector_state in
+            MLVector.Set.add vector set) s set) MLVector.Set.empty list in
+    let set_notok =
+      Seq.fold_left (fun set m ->
         let s =
           match Hashtbl.find_opt features m with
-          | Some (s) -> s
+          | Some s -> s
           | None -> Hashtbl.create 0
         in
         Hashtbl.fold (fun k _ set ->
-            let vector_node = k in
             let vector_state = MLVector.lazy_vector (AbductiveDomain.feature_vector m) in
-            let vector = MLVector.concat vector_node vector_state in
-            MLVector.Set.add vector set) s set)
+            let vector = MLVector.concat k vector_state in
+            if not (MLVector.Set.mem vector set_ok)
+            then MLVector.Set.add vector set
+            else set) s set) MLVector.Set.empty notoks
     in
     Dump.finalize_for_training (fun println ->
         MLVector.Set.iter (fun vector ->
             println "%a %d" MLVector.pp vector 1) set_ok;
         MLVector.Set.iter (fun vector ->
-            if not (MLVector.Set.mem vector set_ok) then
-              println "%a %d" MLVector.pp vector 0) set_notok)
+            println "%a %d" MLVector.pp vector 0) set_notok)
 
 let () = Epilogues.register ~f:close ~description:"flushing dumps and closing dump file"
 

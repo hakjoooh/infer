@@ -435,11 +435,6 @@ module DisjunctiveAnalyzer =
       let join_policy = `UnderApproximateAfter Config.pulse_max_disjuncts
 
       let widen_policy = `UnderApproximateAfterNumIterations Config.pulse_widen_threshold
-
-      let ml_policy = 
-        match Config.pulse_ml_parameters with
-        | Some(x) -> `MLParameters (Some x)
-        | None -> `MLParameters None
     end)
 
 let with_debug_exit_node proc_desc ~f =

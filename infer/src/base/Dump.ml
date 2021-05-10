@@ -1,4 +1,4 @@
-module L = Logging
+(* module L = Logging *)
 module F = Format
   
 let trace_file = ref None
@@ -48,7 +48,7 @@ let read ~f =
 let setup_dump_file () =
   if Config.pulse_train_mode then
     begin
-      L.debug Analysis Quiet "create traces.@\n";
+      (* L.debug Analysis Quiet "create traces.@\n"; *)
       let chan =
         (* if invoked in a sub-dir (e.g., in Buck integrations), log inside the original log file *)
         (* assumes the results dir exists already *)

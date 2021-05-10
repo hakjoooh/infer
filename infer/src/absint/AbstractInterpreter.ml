@@ -244,6 +244,8 @@ struct
           if lhs_length >= n then lhs else list_rev_append rhs lhs (n - lhs_length)
 
 
+    (** Disabled: replay mode *)
+    (*
     let select_join : t -> t -> t =
       let rec list_rev_append l1 l2 n =
         match l1 with hd :: tl when n > 0 -> list_rev_append tl (hd :: l2) (n - 1) | _ -> l2
@@ -269,11 +271,9 @@ struct
             List.iter diff ~f:(fun x -> L.d_printfln "@]@\n@[Discarded@]@\n%a" T.Domain.pp x)
         ) ;
         result_n
+       *)
 
-
-
-    let top_k_join vector : CFG.Node.t option -> t -> t -> t =
-      let _ = MLVector.vector vector in
+    let top_k_join : CFG.Node.t option -> t -> t -> t =
       (** TODO: naive top-k selecting algorithm. *)
       (* let rec logr list score =
        *   match list, score with
@@ -357,38 +357,22 @@ struct
           select_top_k list scores_list n
 
     let join : t -> t -> t =
-      let (`MLParameters ml_policy) = DConfig.ml_policy in
       if Config.pulse_join_select then 
         begin
-          L.debug Analysis Quiet "join mode: Selection by recorded trace@\n";
-          select_join
+          L.debug Analysis Quiet "join mode: Selection by 'model'@\n";
+          top_k_join None
         end
       else 
-        match ml_policy with
-        | Some(vectors) -> 
-            begin
-              (* top_k_join vectors *)
-              L.debug Analysis Quiet "join mode: Selection by ML-parameters@\n";
-              top_k_join vectors None
-            end
-        | None -> orig_join
+        orig_join
 
     let sjoin =
-      let (`MLParameters ml_policy) = DConfig.ml_policy in
       if Config.pulse_join_select then 
         begin
-          L.debug Analysis Quiet "join mode: Selection by recorded trace@\n";
-          fun (_node: CFG.Node.t) -> select_join
+          L.debug Analysis Quiet "join mode: Selection by 'model'@\n";
+          fun node -> top_k_join (Some node)
         end
       else 
-        match ml_policy with
-        | Some(vectors) -> 
-            begin
-              (* top_k_join vectors *)
-              L.debug Analysis Quiet "join mode: Selection by ML-parameters@\n";
-              fun node -> top_k_join vectors (Some node)
-            end
-        | None -> fun _node -> orig_join
+        fun _node -> orig_join
   end
 
   let exec_instr pre_disjuncts analysis_data node instr =

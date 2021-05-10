@@ -37,8 +37,6 @@ module type DisjunctiveConfig = sig
   val join_policy : [`UnderApproximateAfter of int]
 
   val widen_policy : [`UnderApproximateAfterNumIterations of int]
-
-  val ml_policy : [`MLParameters of float list option]
 end
 
 module type DisjReady = sig
