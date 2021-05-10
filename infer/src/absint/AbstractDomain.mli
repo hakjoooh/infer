@@ -34,7 +34,7 @@ module type NoJoinForML = sig
   (** the implication relation: [lhs <= rhs] means [lhs |- rhs] *)
   val similar : t -> t -> bool
 
-  val feature_vector : t -> int lazy_t list
+  val feature_vector : t -> int list
 end
 
 module type S = sig

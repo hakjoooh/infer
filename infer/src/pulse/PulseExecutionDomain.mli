@@ -42,4 +42,4 @@ val is_unsat_cheap : t -> bool
 
 type summary = AbductiveDomain.summary base_t [@@deriving compare, equal, yojson_of]
 
-val feature_vector : t -> int lazy_t list
+val feature_vector : t -> int list

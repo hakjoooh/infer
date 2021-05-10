@@ -44,4 +44,4 @@ val rhs_to_lhs : mapping -> AbstractValue.t AbstractValue.Map.t
 
 
 (** ML feature vectors *)
-val feature_vector : t -> int lazy_t list
+val feature_vector : t -> int list

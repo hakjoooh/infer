@@ -336,19 +336,19 @@ struct
         let len = List.length list in
         if len < n then list
         else 
-          let zi = lazy 0 in
+          let zi = 0 in
           let rec gen i lst =
             if Int.equal i 0 then lst
             else gen (i-1) (zi::lst)
           in
-          let node_features =
+          let node_features: int list =
             match node with
             | None -> gen 55 []
             | Some(node) -> CFG.Node.feature_vector node
           in
           let fn_score = Py.Callable.to_function (Py.Run.eval "score") in
           let scores_list = List.map ~f:(fun vs ->
-              let x = node_features @ T.Domain.feature_vector vs |> MLVector.lazy_vector in
+              let x = node_features @ T.Domain.feature_vector vs |> MLVector.vector in
               let lst = MLVector.to_list x in
               let lst = [| Py.List.of_list_map Py.Int.of_int lst |] in
               let result = fn_score lst in

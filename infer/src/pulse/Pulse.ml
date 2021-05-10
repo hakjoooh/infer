@@ -404,7 +404,7 @@ module PulseTransferFunctions = struct
     let pp_node fmt node = node |> Procdesc.Node.pp fmt in
     let pp = Sil.pp_instr ~print_types:false Pp.text in
     let str = F.asprintf "%a - %a:%a" pp_proc cfg_node pp_node cfg_node pp instr in
-    let vs = MLVector.lazy_vector (Procdesc.Node.feature_vector cfg_node) in
+    let vs = MLVector.vector (Procdesc.Node.feature_vector cfg_node) in
     List.iter outs ~f:(PulseOperations.transition (Some str) (Some vs) astate);
     outs
 

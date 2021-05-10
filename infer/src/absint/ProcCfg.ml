@@ -33,7 +33,7 @@ module type Node = sig
 
   val pp_id : F.formatter -> id -> unit
 
-  val feature_vector : t -> int lazy_t list
+  val feature_vector : t -> int list
 
   module IdMap : PrettyPrintable.PPMap with type key = id
 

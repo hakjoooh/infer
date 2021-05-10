@@ -190,7 +190,7 @@ module Node : sig
 
   val compute_key : t -> NodeKey.t
 
-  val feature_vector : t -> int lazy_t list
+  val feature_vector : t -> int list
 end
 
 (** Map with node id keys. *)

@@ -242,5 +242,5 @@ module Topl : sig
 end
 
 (** ML feature vectors *)
-val feature_vector : t -> int lazy_t list
+val feature_vector : t -> int list
 

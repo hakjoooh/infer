@@ -29,7 +29,7 @@ module type NoJoinForML = sig
 
   val leq : lhs:t -> rhs:t -> bool
   val similar : t -> t -> bool
-  val feature_vector : t -> int lazy_t list
+  val feature_vector : t -> int list
 end
 
 module type S = sig

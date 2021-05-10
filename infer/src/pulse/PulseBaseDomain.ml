@@ -364,12 +364,12 @@ let num_of_allocated base =
 
 (* type t = {heap: Memory.t; stack: Stack.t; attrs: AddressAttributes.t} *)
 let feature_vector t =
-  let v1 = lazy (Memory.cardinal t.heap) in
-  let v2 = lazy (num_of_must_be_valid t) in
-  let v3 = lazy (num_of_written_to t) in
-  let v4 = lazy (num_of_must_be_initialized t) in
-  let v5 = lazy (num_of_invalids t) in
-  let v6 = lazy (num_of_allocated t) in
-  let v7 = lazy (Stack.cardinal t.stack) in
+  let v1 = Memory.cardinal t.heap in
+  let v2 = num_of_must_be_valid t in
+  let v3 = num_of_written_to t in
+  let v4 = num_of_must_be_initialized t in
+  let v5 = num_of_invalids t in
+  let v6 = num_of_allocated t in
+  let v7 = Stack.cardinal t.stack in
   [v1; v2; v3; v4; v5; v6; v7]
 

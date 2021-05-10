@@ -612,7 +612,7 @@ let close () =
     let set_ok =
       Seq.fold_left (fun set (m,s) ->
         Hashtbl.fold (fun k _ set -> 
-            let vector_state = MLVector.lazy_vector (AbductiveDomain.feature_vector m) in
+            let vector_state = MLVector.vector (AbductiveDomain.feature_vector m) in
             let vector = MLVector.concat k vector_state in
             MLVector.Set.add vector set) s set) MLVector.Set.empty list in
     let set_notok =
@@ -623,7 +623,7 @@ let close () =
           | None -> Hashtbl.create 0
         in
         Hashtbl.fold (fun k _ set ->
-            let vector_state = MLVector.lazy_vector (AbductiveDomain.feature_vector m) in
+            let vector_state = MLVector.vector (AbductiveDomain.feature_vector m) in
             let vector = MLVector.concat k vector_state in
             if not (MLVector.Set.mem vector set_ok)
             then MLVector.Set.add vector set

@@ -458,12 +458,12 @@ module Node = struct
           if Int.equal k i then 1
           else 0
         in
-        iter (k-1) (lazy v::lst)
+        iter (k-1) (v::lst)
     in
     iter n []
 
   let feature_vector node = 
-    let v1 = lazy (match get_distance_to_exit node with Some(i) -> i | None -> 0) in
+    let v1 = match get_distance_to_exit node with Some(i) -> i | None -> 0 in
     let v2 = 
       match get_kind node with
           | Start_node -> 1
@@ -520,10 +520,10 @@ module Node = struct
               | ThrowNPE -> 50
               | UnaryOperator -> 51
     in
-    let vs2: int lazy_t list = i_to_b v2 51 in
-    let v3 = lazy (Instrs.count (get_instrs node)) in
-    let v4 = lazy (List.length (get_preds node)) in
-    let v5 = lazy (List.length (get_succs node)) in
+    let vs2: int list = i_to_b v2 51 in
+    let v3 = Instrs.count (get_instrs node) in
+    let v4 = List.length (get_preds node) in
+    let v5 = List.length (get_succs node) in
     [v1] @ vs2 @ [v3; v4; v5]
 end
 
