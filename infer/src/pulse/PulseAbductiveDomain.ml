@@ -102,6 +102,13 @@ let pp f {post; pre; topl; path_condition; skipped_calls} =
   F.fprintf f "@[<v>%a@;%a@;PRE=[%a]@;skipped_calls=%a@;Topl=%a@]" PathCondition.pp path_condition
     PostDomain.pp post PreDomain.pp pre SkippedCalls.pp skipped_calls PulseTopl.pp_state topl
 
+module PPKey = struct
+  type nonrec t = t [@@deriving compare]
+  let pp = pp
+end
+
+module Set = PrettyPrintable.MakePPSet (PPKey)
+
 
 let set_path_condition path_condition astate = {astate with path_condition}
 

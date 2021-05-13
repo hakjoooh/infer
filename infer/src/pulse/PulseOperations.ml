@@ -549,31 +549,28 @@ let transition (i: string option) (vs: MLVector.t option) (a: ExecutionDomain.t)
 
 let reachable a visited =
   let rec iter a depth =
-    if Hashtbl.mem visited a then ()
-    else 
-      begin
-        let vs =
-          match Hashtbl.find_opt features a with
-          | Some (vs) -> vs
-          | None -> Hashtbl.create 1
-        in
-        Hashtbl.add visited a vs;
-        match Hashtbl.find_opt edges a with
-        | Some s ->
-            L.debug Analysis Quiet "found %d edges@\n" (Hashtbl.length s);
-            Hashtbl.iter (fun a i ->
-                if Config.debug_mode then
-                  begin
-                    Option.iter i ~f:(fun x ->
-                        L.debug Analysis Quiet "instr to %s@\n" x);
-                    L.debug Analysis Quiet "found - %d@\n%a@\n" depth AbductiveDomain.pp a
-                  end;
-                iter a (depth + 1)) s
-        | None -> 
-            if Config.debug_mode then
-              L.debug Analysis Quiet "found none edges@\n";
-            ()
-      end
+    if not (Hashtbl.mem visited a) then
+      let vs =
+        match Hashtbl.find_opt features a with
+        | Some (vs) -> vs
+        | None -> Hashtbl.create 1
+      in
+      Hashtbl.add visited a vs;
+      match Hashtbl.find_opt edges a with
+      | Some s ->
+          L.debug Analysis Quiet "found %d edges@\n" (Hashtbl.length s);
+          Hashtbl.iter (fun a i ->
+              if Config.debug_mode then
+                begin
+                  Option.iter i ~f:(fun x ->
+                      L.debug Analysis Quiet "instr to %s@\n" x);
+                  L.debug Analysis Quiet "found - %d@\n%a@\n" depth AbductiveDomain.pp a
+                end;
+              iter a (depth + 1)) s
+      | None -> 
+          if Config.debug_mode then
+            L.debug Analysis Quiet "found none edges@\n";
+          ()
   in
   if Config.debug_mode then
     L.debug Analysis Quiet "search start@\n%a@\n" AbductiveDomain.pp a;
@@ -597,26 +594,25 @@ let dump_traces_for_ml diag astate =
       Hashtbl.to_seq |> 
       Hashtbl.add_seq list
 
+module ASet = AbductiveDomain.Set
+
 let close () =
-  (* Dump.finalize list; *)
   if Config.pulse_train_mode then
-    let is_reachable s = Hashtbl.mem list s in
-    let list = Hashtbl.to_seq list in
     let notoks =
       Hashtbl.fold (fun k v lst ->
-          Seq.cons k (Hashtbl.to_seq_keys v)
-          |> Seq.filter (fun e -> not (is_reachable e))
-          |> Seq.append lst
-        ) edges Seq.empty
-    in
+          Hashtbl.fold (fun k _ lst -> ASet.add k lst) v (ASet.add k lst))
+        edges ASet.empty in
+    let is_unreachable s = not (Hashtbl.mem list s) in
+    let notoks = ASet.filter is_unreachable notoks in
     let set_ok =
-      Seq.fold_left (fun set (m,s) ->
+      Hashtbl.fold (fun m s set ->
         Hashtbl.fold (fun k _ set -> 
             let vector_state = MLVector.vector (AbductiveDomain.feature_vector m) in
             let vector = MLVector.concat k vector_state in
-            MLVector.Set.add vector set) s set) MLVector.Set.empty list in
+            MLVector.Set.add vector set) s set) list MLVector.Set.empty
+    in
     let set_notok =
-      Seq.fold_left (fun set m ->
+      AbductiveDomain.Set.fold (fun m set ->
         let s =
           match Hashtbl.find_opt features m with
           | Some s -> s
@@ -625,9 +621,7 @@ let close () =
         Hashtbl.fold (fun k _ set ->
             let vector_state = MLVector.vector (AbductiveDomain.feature_vector m) in
             let vector = MLVector.concat k vector_state in
-            if not (MLVector.Set.mem vector set_ok)
-            then MLVector.Set.add vector set
-            else set) s set) MLVector.Set.empty notoks
+            MLVector.Set.add vector set) s set) notoks MLVector.Set.empty
     in
     Dump.finalize_for_training (fun println ->
         MLVector.Set.iter (fun vector ->

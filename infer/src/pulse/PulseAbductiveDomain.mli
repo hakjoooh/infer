@@ -67,6 +67,8 @@ type t = private
   }
 [@@deriving equal]
 
+module Set : PrettyPrintable.PPSet with type elt = t
+
 val similar : lhs:t -> rhs:t -> bool
 
 val leq : lhs:t -> rhs:t -> bool

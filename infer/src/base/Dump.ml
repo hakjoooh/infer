@@ -36,30 +36,8 @@ let read ~f =
   else
     None
 
-(* let load_dump_file () =
- *   let x = Sys.file_exists logfile_path in
- *   let preexisting_file = PolyVariantEqual.( = ) x `Yes in
- *   if preexisting_file then
- *     begin
- *       L.debug Analysis Quiet "loading traces.@\n";
- *       replay_mode := true
- *     end *)
-
 let setup_dump_file () =
   if Config.pulse_train_mode then
-    begin
-      (* L.debug Analysis Quiet "create traces.@\n"; *)
-      let chan =
-        (* if invoked in a sub-dir (e.g., in Buck integrations), log inside the original log file *)
-        (* assumes the results dir exists already *)
-        (* let logfile_path =
-         *   ResultsDirEntryName.get_path ~results_dir:Config.toplevel_results_dir TraceForML
-         * in *)
-        (* let preexisting_logfile = PolyVariantEqual.( = ) (Sys.file_exists logfile_path) `Yes in *)
-        let chan = Stdlib.open_out_gen [Open_append; Open_creat] 0o666 logfile_path in
-        chan
-      in
-      trace_file := Some (chan)
-    end
+    trace_file := Some (Stdlib.open_out_gen [Open_append; Open_creat] 0o666 logfile_path)
   (* else 
    *   load_dump_file () *)
