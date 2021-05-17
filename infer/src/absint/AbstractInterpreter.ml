@@ -358,19 +358,13 @@ struct
 
     let join : t -> t -> t =
       if Config.pulse_join_select then 
-        begin
-          L.debug Analysis Quiet "join mode: Selection by 'model'@\n";
-          top_k_join None
-        end
+        top_k_join None
       else 
         orig_join
 
     let sjoin =
       if Config.pulse_join_select then 
-        begin
-          L.debug Analysis Quiet "join mode: Selection by 'model'@\n";
-          fun node -> top_k_join (Some node)
-        end
+        fun node -> top_k_join (Some node)
       else 
         fun _node -> orig_join
   end

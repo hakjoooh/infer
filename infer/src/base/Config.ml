@@ -2063,7 +2063,7 @@ and pulse_train_mode =
     "Pulse train mode for ML."
 
 and pulse_join_select =
-  CLOpt.mk_bool ~long:"pulse-join-select" ~default:false
+  CLOpt.mk_string ~long:"pulse-join-select" ~default:"./model"
     "Pulse join operator with recorded traces"
 
 and pure_by_default =
@@ -3297,7 +3297,53 @@ and pulse_nullsafe_report_npe = !pulse_nullsafe_report_npe
 
 and pulse_train_mode = !pulse_train_mode
 
-and pulse_join_select = !pulse_join_select
+and pulse_join_select =
+  let name = !pulse_join_select in
+  if PolyVariantEqual.( = ) (Sys.file_exists name) `Yes then
+    begin
+      print_endline ("Loading the ML model: "^name);
+      Py.initialize ();
+      ignore (Py.Run.eval ~start:Py.File ("
+# should load the trained model here.
+import numpy as np
+from sklearn.neural_network import MLPClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.gaussian_process import GaussianProcessClassifier
+from sklearn.gaussian_process.kernels import RBF
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.naive_bayes import GaussianNB
+import sys
+import subprocess
+import random
+import time
+import pickle
+
+clf = pickle.load(open('"^name^"', 'rb'))
+
+def classify (x):
+    pred = clf.predict ([x])
+    if hasattr(clf, 'decision_function'):
+        prob = clf.decision_function([x])
+    elif hasattr (clf, 'predict_prob'):
+        prob = clf.predict_prob([x])
+        if pred == 1:
+            prob = np.array ([list(prob)[0][0]])
+        else:
+            prob = np.array ([list(prob)[0][1]])
+    else:
+        prob = [0]
+    return pred[0], prob[0]
+
+def score(m):
+    pred, prob = classify(m)
+    return 5+prob
+"));true
+    end
+  else
+    L.(die UserError) "Wrong argument for --pulse-join-select: cannot find the ML model: '%s'" name
 
 and pure_by_default = !pure_by_default
 

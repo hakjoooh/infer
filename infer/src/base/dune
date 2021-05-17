@@ -10,7 +10,7 @@
   (:standard -open Core -open IStdlib -open IStd -open ATDGenerated -open
     OpenSource))
  (libraries cmdliner core memtrace mtime.clock.os parmap re sqlite3 zip
-   ATDGenerated IStdlib OpenSource)
+   ATDGenerated IStdlib OpenSource pyml)
  (preprocess
   (pps ppx_blob ppx_compare ppx_enumerate))
  (preprocessor_deps
