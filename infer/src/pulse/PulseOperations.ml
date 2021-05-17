@@ -38,6 +38,149 @@ let set_oracle (astates: (t, string option) Hashtbl.t) =
   oracle_loaded := true;
   Hashtbl.add_seq oracle (Hashtbl.to_seq astates)
 
+(* out -> in Hashtbl.t *)
+let edges = Hashtbl.create 10000
+let list = Hashtbl.create 100000
+let features = Hashtbl.create 100000
+
+let add_feature vs a =
+      match vs with
+      | Some (vs) ->
+          let ntbl = 
+            match Hashtbl.find_opt features a with
+            | Some(tbl) -> tbl
+            | None -> Hashtbl.create 100
+          in
+          Hashtbl.add ntbl vs ();
+          Hashtbl.add features a ntbl
+      | None -> ()
+  
+let add_transition i vs (a: t) (b: t) =
+  if Config.pulse_train_mode then
+    begin
+      add_feature vs a;
+      add_feature vs b;
+      if AbductiveDomain.equal a b then ()
+      else if Hashtbl.mem edges b then
+        begin
+          Hashtbl.add (Hashtbl.find edges b) a i
+        end
+      else
+        begin
+          let ntbl = Hashtbl.create 100 in
+          Hashtbl.add ntbl a i;
+          Hashtbl.add edges b ntbl
+        end
+    end
+
+let get_astate: ExecutionDomain.t -> AbductiveDomain.t = function
+  | ContinueProgram astate -> astate
+  | ExitProgram astate
+  | AbortProgram astate
+  | LatentAbortProgram {astate}
+  | LatentInvalidAccess {astate}
+  | ISLLatentMemoryError astate ->
+      (astate :> AbductiveDomain.t)
+
+let transition (i: string option) (vs: MLVector.t option) (a: ExecutionDomain.t) (b: ExecutionDomain.t) = 
+  (** TODO: ExecutionDomain *)
+  let aa = get_astate a in
+  let bb = get_astate b in
+  if Config.debug_mode then
+    begin
+      Option.iter i ~f:(L.debug Analysis Quiet "instr - %s@\n");
+      L.debug Analysis Quiet "transition from@\n%a@\n" ExecutionDomain.pp a;
+      L.debug Analysis Quiet "transition to@\n%a@\n" ExecutionDomain.pp b;
+    end;
+  add_transition i vs aa bb
+
+let reachable a visited =
+  let rec iter a depth =
+    if not (Hashtbl.mem visited a) then
+      let vs =
+        match Hashtbl.find_opt features a with
+        | Some (vs) -> vs
+        | None -> Hashtbl.create 1
+      in
+      Hashtbl.add visited a vs;
+      match Hashtbl.find_opt edges a with
+      | Some s ->
+          L.debug Analysis Quiet "found %d edges@\n" (Hashtbl.length s);
+          Hashtbl.iter (fun a i ->
+              if Config.debug_mode then
+                begin
+                  Option.iter i ~f:(fun x ->
+                      L.debug Analysis Quiet "instr to %s@\n" x);
+                  L.debug Analysis Quiet "found - %d@\n%a@\n" depth AbductiveDomain.pp a
+                end;
+              iter a (depth + 1)) s
+      | None -> 
+          if Config.debug_mode then
+            L.debug Analysis Quiet "found none edges@\n";
+          ()
+  in
+  if Config.debug_mode then
+    L.debug Analysis Quiet "search start@\n%a@\n" AbductiveDomain.pp a;
+  iter a 0;
+  if Config.debug_mode then
+    L.debug Analysis Quiet "reachable set: %s@\n" (string_of_int (Hashtbl.length visited))
+
+module ASet = AbductiveDomain.Set
+
+let close () =
+  if Config.pulse_train_mode then
+    let notoks =
+      Hashtbl.fold (fun k v lst ->
+          Hashtbl.fold (fun k _ lst -> ASet.add k lst) v (ASet.add k lst))
+        edges ASet.empty in
+    let is_unreachable s = not (Hashtbl.mem list s) in
+    let notoks = ASet.filter is_unreachable notoks in
+    let set_ok =
+      Hashtbl.fold (fun m s set ->
+        Hashtbl.fold (fun k _ set -> 
+            let vector_state = MLVector.vector (AbductiveDomain.feature_vector m) in
+            let vector = MLVector.concat k vector_state in
+            MLVector.Set.add vector set) s set) list MLVector.Set.empty
+    in
+    let set_notok =
+      AbductiveDomain.Set.fold (fun m set ->
+        let s =
+          match Hashtbl.find_opt features m with
+          | Some s -> s
+          | None -> Hashtbl.create 0
+        in
+        Hashtbl.fold (fun k _ set ->
+            let vector_state = MLVector.vector (AbductiveDomain.feature_vector m) in
+            let vector = MLVector.concat k vector_state in
+            MLVector.Set.add vector set) s set) notoks MLVector.Set.empty
+    in
+    Dump.finalize_for_training (fun println ->
+        MLVector.Set.iter (fun vector ->
+            println "%a %d" MLVector.pp vector 1) set_ok;
+        MLVector.Set.iter (fun vector ->
+            println "%a %d" MLVector.pp vector 0) set_notok)
+
+let () = Epilogues.register ~f:close ~description:"flushing dumps and closing dump file"
+
+
+let diagnostics = Hashtbl.create 10000
+
+let dump_traces_for_ml diag astate = 
+  (* TODO: All the abstract states reachable here is the ContinueProgram type. *) 
+  (* let astate = ContinueProgram astate in *)
+  L.debug Analysis Quiet "Error log@\n%s@\n" (Diagnostic.get_message diag);
+  L.debug Analysis Quiet "dump try@\n";
+  if Config.pulse_train_mode then
+    if not (Hashtbl.mem diagnostics diag) then
+      let set = Hashtbl.create 1000 in
+      Hashtbl.add diagnostics diag ();
+      reachable astate set;
+      set |>
+      Hashtbl.to_seq |> 
+      Hashtbl.add_seq list
+
+
+
 module Import = struct
   type access_mode = Read | Write | NoAccess
 
@@ -75,20 +218,23 @@ let check_addr_access access_mode location (address, history) astate =
   let* astate =
     AddressAttributes.check_valid access_trace address astate
     |> Result.map_error ~f:(fun (invalidation, invalidation_trace) ->
-           ReportableError
-             { diagnostic=
-                 Diagnostic.AccessToInvalidAddress
-                   {calling_context= []; invalidation; invalidation_trace; access_trace}
-             ; astate } )
+        let diagnostic =
+          Diagnostic.AccessToInvalidAddress
+            {calling_context= []; invalidation; invalidation_trace; access_trace}
+        in
+        dump_traces_for_ml diagnostic astate;
+        ReportableError { diagnostic; astate } )
   in
   match access_mode with
   | Read ->
       AddressAttributes.check_initialized access_trace address astate
       |> Result.map_error ~f:(fun () ->
-             ReportableError
-               { diagnostic=
-                   Diagnostic.ReadUninitializedValue {calling_context= []; trace= access_trace}
-               ; astate } )
+          let diagnostic =
+            Diagnostic.ReadUninitializedValue
+              {calling_context= []; trace= access_trace}
+          in
+          dump_traces_for_ml diagnostic astate;
+          ReportableError { diagnostic; astate } )
   | Write ->
       Ok (AbductiveDomain.initialize address astate)
   | NoAccess ->
@@ -105,11 +251,12 @@ let check_and_abduce_addr_access_isl access_mode location (address, history) ?(n
          | Read ->
              AddressAttributes.check_initialized access_trace address astate
              |> Result.map_error ~f:(fun () ->
-                    ReportableError
-                      { diagnostic=
-                          Diagnostic.ReadUninitializedValue
-                            {calling_context= []; trace= access_trace}
-                      ; astate } )
+                 let diagnostic =
+                   Diagnostic.ReadUninitializedValue
+                     {calling_context= []; trace= access_trace}
+                 in
+                 dump_traces_for_ml diagnostic astate;
+                 ReportableError { diagnostic; astate })
          | Write ->
              Ok (AbductiveDomain.initialize address astate)
          | NoAccess ->
@@ -451,12 +598,12 @@ let check_address_escape escape_location proc_desc address history astate =
                  when not (is_assigned_to_global address astate) ->
                    (* The returned address corresponds to a C++ temporary. It will have gone out of
                       scope by now except if it was bound to a global. *)
-                   Error
-                     (ReportableError
-                        { diagnostic=
-                            Diagnostic.StackVariableAddressEscape
-                              {variable; location= escape_location; history}
-                        ; astate })
+                   let diagnostic =
+                     Diagnostic.StackVariableAddressEscape
+                       {variable; location= escape_location; history}
+                   in
+                   dump_traces_for_ml diagnostic astate;
+                   Error (ReportableError { diagnostic; astate })
                | _ ->
                    Ok () ) )
   in
@@ -472,12 +619,12 @@ let check_address_escape escape_location proc_desc address history astate =
         then (
           L.d_printfln_escaped "Stack variable address &%a detected at address %a" Var.pp variable
             AbstractValue.pp address ;
-          Error
-            (ReportableError
-               { diagnostic=
-                   Diagnostic.StackVariableAddressEscape
-                     {variable; location= escape_location; history}
-               ; astate }) )
+          let diagnostic =
+            Diagnostic.StackVariableAddressEscape
+              {variable; location= escape_location; history}
+          in
+          dump_traces_for_ml diagnostic astate;
+          Error (ReportableError { diagnostic; astate }) )
         else Ok () )
   in
   let+ () = check_address_of_cpp_temporary () >>= check_address_of_stack_variable in
@@ -490,146 +637,6 @@ let mark_address_of_cpp_temporary history variable address astate =
 
 let mark_address_of_stack_variable history variable location address astate =
   AddressAttributes.add_one address (AddressOfStackVariable (variable, location, history)) astate
-
-(* out -> in Hashtbl.t *)
-let edges = Hashtbl.create 10000
-let list = Hashtbl.create 100000
-let features = Hashtbl.create 100000
-
-let add_feature vs a =
-      match vs with
-      | Some (vs) ->
-          let ntbl = 
-            match Hashtbl.find_opt features a with
-            | Some(tbl) -> tbl
-            | None -> Hashtbl.create 100
-          in
-          Hashtbl.add ntbl vs ();
-          Hashtbl.add features a ntbl
-      | None -> ()
-  
-let add_transition i vs (a: t) (b: t) =
-  if Config.pulse_train_mode then
-    begin
-      add_feature vs a;
-      add_feature vs b;
-      if AbductiveDomain.equal a b then ()
-      else if Hashtbl.mem edges b then
-        begin
-          Hashtbl.add (Hashtbl.find edges b) a i
-        end
-      else
-        begin
-          let ntbl = Hashtbl.create 100 in
-          Hashtbl.add ntbl a i;
-          Hashtbl.add edges b ntbl
-        end
-    end
-
-let get_astate: ExecutionDomain.t -> AbductiveDomain.t = function
-  | ContinueProgram astate -> astate
-  | ExitProgram astate
-  | AbortProgram astate
-  | LatentAbortProgram {astate}
-  | LatentInvalidAccess {astate}
-  | ISLLatentMemoryError astate ->
-      (astate :> AbductiveDomain.t)
-
-let transition (i: string option) (vs: MLVector.t option) (a: ExecutionDomain.t) (b: ExecutionDomain.t) = 
-  (** TODO: ExecutionDomain *)
-  let aa = get_astate a in
-  let bb = get_astate b in
-  if Config.debug_mode then
-    begin
-      Option.iter i ~f:(L.debug Analysis Quiet "instr - %s@\n");
-      L.debug Analysis Quiet "transition from@\n%a@\n" ExecutionDomain.pp a;
-      L.debug Analysis Quiet "transition to@\n%a@\n" ExecutionDomain.pp b;
-    end;
-  add_transition i vs aa bb
-
-let reachable a visited =
-  let rec iter a depth =
-    if not (Hashtbl.mem visited a) then
-      let vs =
-        match Hashtbl.find_opt features a with
-        | Some (vs) -> vs
-        | None -> Hashtbl.create 1
-      in
-      Hashtbl.add visited a vs;
-      match Hashtbl.find_opt edges a with
-      | Some s ->
-          L.debug Analysis Quiet "found %d edges@\n" (Hashtbl.length s);
-          Hashtbl.iter (fun a i ->
-              if Config.debug_mode then
-                begin
-                  Option.iter i ~f:(fun x ->
-                      L.debug Analysis Quiet "instr to %s@\n" x);
-                  L.debug Analysis Quiet "found - %d@\n%a@\n" depth AbductiveDomain.pp a
-                end;
-              iter a (depth + 1)) s
-      | None -> 
-          if Config.debug_mode then
-            L.debug Analysis Quiet "found none edges@\n";
-          ()
-  in
-  if Config.debug_mode then
-    L.debug Analysis Quiet "search start@\n%a@\n" AbductiveDomain.pp a;
-  iter a 0;
-  if Config.debug_mode then
-    L.debug Analysis Quiet "reachable set: %s@\n" (string_of_int (Hashtbl.length visited))
-
-let diagnostics = Hashtbl.create 10000
-
-let dump_traces_for_ml diag astate = 
-  (* TODO: All the abstract states reachable here is the ContinueProgram type. *) 
-  (* let astate = ContinueProgram astate in *)
-  L.debug Analysis Quiet "Error log@\n%s@\n" (Diagnostic.get_message diag);
-  L.debug Analysis Quiet "dump try@\n";
-  if Config.pulse_train_mode then
-    if not (Hashtbl.mem diagnostics diag) then
-      let set = Hashtbl.create 1000 in
-      Hashtbl.add diagnostics diag ();
-      reachable astate set;
-      set |>
-      Hashtbl.to_seq |> 
-      Hashtbl.add_seq list
-
-module ASet = AbductiveDomain.Set
-
-let close () =
-  if Config.pulse_train_mode then
-    let notoks =
-      Hashtbl.fold (fun k v lst ->
-          Hashtbl.fold (fun k _ lst -> ASet.add k lst) v (ASet.add k lst))
-        edges ASet.empty in
-    let is_unreachable s = not (Hashtbl.mem list s) in
-    let notoks = ASet.filter is_unreachable notoks in
-    let set_ok =
-      Hashtbl.fold (fun m s set ->
-        Hashtbl.fold (fun k _ set -> 
-            let vector_state = MLVector.vector (AbductiveDomain.feature_vector m) in
-            let vector = MLVector.concat k vector_state in
-            MLVector.Set.add vector set) s set) list MLVector.Set.empty
-    in
-    let set_notok =
-      AbductiveDomain.Set.fold (fun m set ->
-        let s =
-          match Hashtbl.find_opt features m with
-          | Some s -> s
-          | None -> Hashtbl.create 0
-        in
-        Hashtbl.fold (fun k _ set ->
-            let vector_state = MLVector.vector (AbductiveDomain.feature_vector m) in
-            let vector = MLVector.concat k vector_state in
-            MLVector.Set.add vector set) s set) notoks MLVector.Set.empty
-    in
-    Dump.finalize_for_training (fun println ->
-        MLVector.Set.iter (fun vector ->
-            println "%a %d" MLVector.pp vector 1) set_ok;
-        MLVector.Set.iter (fun vector ->
-            println "%a %d" MLVector.pp vector 0) set_notok)
-
-let () = Epilogues.register ~f:close ~description:"flushing dumps and closing dump file"
 
 
 let check_memory_leak_unreachable unreachable_addrs location astate =
@@ -648,12 +655,12 @@ let check_memory_leak_unreachable unreachable_addrs location astate =
     match allocated_not_freed_opt with
     | Some (procname, trace), false ->
         (* allocated but not freed *)
-        dump_traces_for_ml (Diagnostic.MemoryLeak {procname; location; allocation_trace= trace}) astate;
-        L.debug Analysis Quiet "restore check: %s@\n" (string_of_bool (is_in_oracle astate));
-        Error
-          (ReportableError
-             { diagnostic= Diagnostic.MemoryLeak {procname; location; allocation_trace= trace}
-             ; astate })
+        let diagnostic =
+          Diagnostic.MemoryLeak
+            {procname; location; allocation_trace= trace}
+        in
+        dump_traces_for_ml diagnostic astate;
+        Error (ReportableError { diagnostic; astate })
     | _ ->
         result
   in
