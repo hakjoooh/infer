@@ -2063,7 +2063,7 @@ and pulse_train_mode =
     "Pulse train mode for ML."
 
 and pulse_join_select =
-  CLOpt.mk_string ~long:"pulse-join-select" ~default:"./model"
+  CLOpt.mk_string ~long:"pulse-join-select" ~default:""
     "Pulse join operator with recorded traces"
 
 and pure_by_default =
@@ -3299,7 +3299,8 @@ and pulse_train_mode = !pulse_train_mode
 
 and pulse_join_select =
   let name = !pulse_join_select in
-  if PolyVariantEqual.( = ) (Sys.file_exists name) `Yes then
+  if String.equal name "" then false
+  else if PolyVariantEqual.( = ) (Sys.file_exists name) `Yes then
     begin
       print_endline ("Loading the ML model: "^name);
       Py.initialize ();
