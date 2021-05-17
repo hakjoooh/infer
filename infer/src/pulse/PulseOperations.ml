@@ -158,7 +158,7 @@ let close () =
         MLVector.Set.iter (fun vector ->
             println "%a %d" MLVector.pp vector 1) set_ok;
         MLVector.Set.iter (fun vector ->
-            println "%a %d" MLVector.pp vector 0) set_notok)
+            println "%a %d" MLVector.pp vector -1) set_notok)
 
 let () = Epilogues.register ~f:close ~description:"flushing dumps and closing dump file"
 
