@@ -273,7 +273,7 @@ struct
         result_n
        *)
 
-    let top_k_join : CFG.Node.t option -> t -> t -> t =
+    let top_k_join : (Pytypes.pyobject array -> Pytypes.pyobject) -> CFG.Node.t option -> t -> t -> t =
       (** TODO: naive top-k selecting algorithm. *)
       (* let rec logr list score =
        *   match list, score with
@@ -329,7 +329,7 @@ struct
       in
       (** until here ***)
       let (`UnderApproximateAfter n) = DConfig.join_policy in
-      fun node lhs rhs ->
+      fun fn_score node lhs rhs ->
       if phys_equal lhs rhs then lhs
       else
         let list = lhs @ rhs in
@@ -345,8 +345,7 @@ struct
             match node with
             | None -> gen 55 []
             | Some(node) -> CFG.Node.feature_vector node
-          in
-          let fn_score = Py.Callable.to_function (Py.Run.eval "score") in
+          in 
           let scores_list = List.map ~f:(fun vs ->
               let x = node_features @ T.Domain.feature_vector vs |> MLVector.vector in
               let lst = MLVector.to_list x in
@@ -357,16 +356,17 @@ struct
           select_top_k list scores_list n
 
     let join : t -> t -> t =
-      if Config.pulse_join_select then 
-        top_k_join None
-      else 
-        orig_join
+      match Config.pulse_join_select with
+      | Some(fn) -> top_k_join fn None
+      | None -> orig_join
 
     let sjoin =
-      if Config.pulse_join_select then 
-        fun node -> top_k_join (Some node)
-      else 
-        fun _node -> orig_join
+      match Config.pulse_join_select with
+      | Some(fn) -> 
+          let top_k_join = top_k_join fn in
+          fun node -> top_k_join (Some node)
+      | None ->
+          fun _node -> orig_join
   end
 
   let exec_instr pre_disjuncts analysis_data node instr =
