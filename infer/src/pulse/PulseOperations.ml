@@ -14,6 +14,10 @@ open PulseDomainInterface
 
 type t = AbductiveDomain.t
 
+
+module ASet = AbductiveDomain.Set
+module AMap = AbductiveDomain.Map
+
 let oracle = Hashtbl.create 1000
 let is_in_oracle (astate : t) =
   if Config.pulse_train_mode then true
@@ -40,7 +44,7 @@ let set_oracle (astates: (t, string option) Hashtbl.t) =
 
 (* out -> in Hashtbl.t *)
 let edges = Hashtbl.create 10000
-let list = Hashtbl.create 100000
+let list = ref AMap.empty
 let features = Hashtbl.create 100000
 
 let add_feature vs a =
@@ -49,9 +53,9 @@ let add_feature vs a =
           let ntbl = 
             match Hashtbl.find_opt features a with
             | Some(tbl) -> tbl
-            | None -> Hashtbl.create 100
+            | None -> MLVector.Set.empty
           in
-          Hashtbl.add ntbl vs ();
+          let ntbl = MLVector.Set.add vs ntbl in
           Hashtbl.add features a ntbl
       | None -> ()
   
@@ -95,37 +99,37 @@ let transition (i: string option) (vs: MLVector.t option) (a: ExecutionDomain.t)
   add_transition i vs aa bb
 
 let reachable a visited =
-  let rec iter a depth =
-    if not (Hashtbl.mem visited a) then
+  let rec iter a depth visited =
+    if AMap.mem a visited then
+      visited
+    else
       let vs =
         match Hashtbl.find_opt features a with
         | Some (vs) -> vs
-        | None -> Hashtbl.create 1
+        | None -> MLVector.Set.empty
       in
-      Hashtbl.add visited a vs;
+      let visited = AMap.add a vs visited in
       match Hashtbl.find_opt edges a with
       | Some s ->
-          L.debug Analysis Quiet "found %d edges@\n" (Hashtbl.length s);
-          Hashtbl.iter (fun a i ->
+          Hashtbl.fold (fun a i visited ->
               if Config.debug_mode then
                 begin
                   Option.iter i ~f:(fun x ->
                       L.debug Analysis Quiet "instr to %s@\n" x);
                   L.debug Analysis Quiet "found - %d@\n%a@\n" depth AbductiveDomain.pp a
                 end;
-              iter a (depth + 1)) s
+              iter a (depth + 1) visited) s visited
       | None -> 
           if Config.debug_mode then
             L.debug Analysis Quiet "found none edges@\n";
-          ()
+          visited
   in
   if Config.debug_mode then
     L.debug Analysis Quiet "search start@\n%a@\n" AbductiveDomain.pp a;
-  iter a 0;
+  let visited = iter a 0 visited in
   if Config.debug_mode then
-    L.debug Analysis Quiet "reachable set: %s@\n" (string_of_int (Hashtbl.length visited))
-
-module ASet = AbductiveDomain.Set
+    L.debug Analysis Quiet "reachable set: %s@\n" (string_of_int (AMap.cardinal visited));
+  visited
 
 let close () =
   if Config.pulse_train_mode then
@@ -133,23 +137,23 @@ let close () =
       Hashtbl.fold (fun k v lst ->
           Hashtbl.fold (fun k _ lst -> ASet.add k lst) v (ASet.add k lst))
         edges ASet.empty in
-    let is_unreachable s = not (Hashtbl.mem list s) in
+    let is_unreachable s = not (AMap.mem s !list) in
     let notoks = ASet.filter is_unreachable notoks in
     let set_ok =
-      Hashtbl.fold (fun m s set ->
-        Hashtbl.fold (fun k _ set -> 
-            let vector_state = MLVector.vector (AbductiveDomain.feature_vector m) in
-            let vector = MLVector.concat k vector_state in
-            MLVector.Set.add vector set) s set) list MLVector.Set.empty
+      AMap.fold (fun m s set ->
+          MLVector.Set.fold (fun k set ->
+              let vector_state = MLVector.vector (AbductiveDomain.feature_vector m) in
+              let vector = MLVector.concat k vector_state in
+              MLVector.Set.add vector set) s set) !list MLVector.Set.empty
     in
     let set_notok =
       AbductiveDomain.Set.fold (fun m set ->
         let s =
           match Hashtbl.find_opt features m with
           | Some s -> s
-          | None -> Hashtbl.create 0
+          | None -> MLVector.Set.empty
         in
-        Hashtbl.fold (fun k _ set ->
+        MLVector.Set.fold (fun k set ->
             let vector_state = MLVector.vector (AbductiveDomain.feature_vector m) in
             let vector = MLVector.concat k vector_state in
             MLVector.Set.add vector set) s set) notoks MLVector.Set.empty
@@ -163,23 +167,22 @@ let close () =
 let () = Epilogues.register ~f:close ~description:"flushing dumps and closing dump file"
 
 
-let diagnostics = Hashtbl.create 10000
+(* let diagnostics = Hashtbl.create 10000 *)
 
-let dump_traces_for_ml diag astate = 
+let dump_traces_for_ml _diag astate = 
   (* TODO: All the abstract states reachable here is the ContinueProgram type. *) 
-  (* let astate = ContinueProgram astate in *)
-  L.debug Analysis Quiet "Error log@\n%s@\n" (Diagnostic.get_message diag);
-  L.debug Analysis Quiet "dump try@\n";
   if Config.pulse_train_mode then
-    if not (Hashtbl.mem diagnostics diag) then
-      let set = Hashtbl.create 1000 in
-      Hashtbl.add diagnostics diag ();
-      reachable astate set;
-      set |>
-      Hashtbl.to_seq |> 
-      Hashtbl.add_seq list
-
-
+    (** TODO: should we compute all reachable states? *)
+    list := reachable astate !list
+    (* begin
+     *   if not (Hashtbl.mem diagnostics diag) then
+     *     begin
+     *       Hashtbl.add diagnostics diag ();
+     *       list := reachable astate !list
+     *     end
+     *   else
+     *     list := reachable astate !list
+     * end *)
 
 module Import = struct
   type access_mode = Read | Write | NoAccess

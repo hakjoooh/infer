@@ -334,7 +334,7 @@ struct
       else
         let list = lhs @ rhs in
         let len = List.length list in
-        if len < n then list
+        if len <= n then list
         else 
           let zi = 0 in
           let rec gen i lst =

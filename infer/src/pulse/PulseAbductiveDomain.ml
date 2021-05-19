@@ -108,7 +108,7 @@ module PPKey = struct
 end
 
 module Set = PrettyPrintable.MakePPSet (PPKey)
-
+module Map = PrettyPrintable.MakePPMap (PPKey)
 
 let set_path_condition path_condition astate = {astate with path_condition}
 
