@@ -349,10 +349,16 @@ struct
           let scores_list = List.map ~f:(fun vs ->
               let x = node_features @ T.Domain.feature_vector vs |> MLVector.vector in
               let lst = MLVector.to_list x in
-              let lst = [| Py.List.of_list_map Py.Int.of_int lst |] in
-              let result = fn_score lst in
-              Py.Float.to_float result
+              Py.List.of_list_map Py.Int.of_int lst
             ) list in
+          let scores_list = fn_score [| Py.List.of_list scores_list |] in
+          let scores_list = Py.List.to_list_map Py.Float.to_float scores_list in
+          (* discard similar states *)
+          let scores_list = List.fold_left scores_list ~init:[] ~f:(fun lst k ->
+              match List.find lst ~f:(Float.equal k) with
+              | Some(_) -> -10.::lst
+              | None -> k::lst)
+          in
           select_top_k list scores_list n
 
     let join : t -> t -> t =

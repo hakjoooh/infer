@@ -3309,7 +3309,7 @@ import pickle
 clf = pickle.load(open('"^name^"', 'rb'))
 decision = clf.decision_function
 def score(x):
-    return decision([x])[0]
+    return decision(x)
 "));
       let fn_score = Py.Callable.to_function (Py.Run.eval "score") in
       Some(fn_score)
