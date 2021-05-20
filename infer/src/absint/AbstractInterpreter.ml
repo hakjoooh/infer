@@ -329,6 +329,12 @@ struct
       in
       (** until here ***)
       let (`UnderApproximateAfter n) = DConfig.join_policy in
+      let zi = 0 in
+      let rec gen i lst =
+        if Int.equal i 0 then lst
+        else gen (i-1) (zi::lst)
+      in
+      let empty_feature = gen 55 [] in
       fun fn_score node lhs rhs ->
       if phys_equal lhs rhs then lhs
       else
@@ -336,21 +342,15 @@ struct
         let len = List.length list in
         if len <= n then list
         else 
-          let zi = 0 in
-          let rec gen i lst =
-            if Int.equal i 0 then lst
-            else gen (i-1) (zi::lst)
-          in
           let node_features: int list =
             match node with
-            | None -> gen 55 []
+            | None -> empty_feature
             | Some(node) -> CFG.Node.feature_vector node
           in 
           let scores_list = List.map ~f:(fun vs ->
-              let x = node_features @ T.Domain.feature_vector vs |> MLVector.vector in
-              let lst = MLVector.to_list x in
-              Py.List.of_list_map Py.Int.of_int lst
-            ) list in
+              let lst = node_features @ T.Domain.feature_vector vs in
+              Py.List.of_list_map Py.Int.of_int lst) list
+          in
           let scores_list = fn_score [| Py.List.of_list scores_list |] in
           let scores_list = Py.List.to_list_map Py.Float.to_float scores_list in
           (* discard similar states *)
