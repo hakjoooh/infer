@@ -18,30 +18,6 @@ type t = AbductiveDomain.t
 module ASet = AbductiveDomain.Set
 module AMap = AbductiveDomain.Map
 
-let oracle = Hashtbl.create 1000
-let is_in_oracle (astate : t) =
-  if Config.pulse_train_mode then true
-  else 
-    begin
-      ( if Config.write_html then
-          let n = Hashtbl.length oracle in
-          L.d_printfln "@]@\n@[The size of oracle: %d@]" n );
-      try 
-        Hashtbl.iter (fun k _ -> if AbductiveDomain.similar ~lhs:k ~rhs:astate then raise (Not_found_s (Base.Sexp.Atom ""))) oracle;false
-      with Not_found_s _ -> true
-                              (* Hashtbl.mem oracle astate *)
-    end
-
-let oracle_loaded = ref false
-let oracle_is_loaded () =
-  L.debug Analysis Quiet "oracle_is_loaded is_recording: %s@\n" (string_of_bool Config.pulse_train_mode);
-  if Config.pulse_train_mode then true
-  else !oracle_loaded
-    
-let set_oracle (astates: (t, string option) Hashtbl.t) = 
-  oracle_loaded := true;
-  Hashtbl.add_seq oracle (Hashtbl.to_seq astates)
-
 (* out -> in Hashtbl.t *)
 let edges = Hashtbl.create 10000
 let list = ref AMap.empty
@@ -66,9 +42,7 @@ let add_transition i vs (a: t) (b: t) =
       add_feature vs b;
       if AbductiveDomain.equal a b then ()
       else if Hashtbl.mem edges b then
-        begin
           Hashtbl.add (Hashtbl.find edges b) a i
-        end
       else
         begin
           let ntbl = Hashtbl.create 100 in

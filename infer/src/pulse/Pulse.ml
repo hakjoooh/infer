@@ -408,15 +408,7 @@ module PulseTransferFunctions = struct
     List.iter outs ~f:(PulseOperations.transition (Some str) (Some vs) astate);
     outs
 
-
-
   let pp_session_name _node fmt = F.pp_print_string fmt "Pulse"
-
-  let is_in_oracle (astate: Domain.t) =
-    match astate with
-    | ContinueProgram astate -> PulseOperations.is_in_oracle astate
-    | _ -> true
-
 end
 
 module PulseTransferFunctionsML = struct
@@ -445,23 +437,6 @@ let with_debug_exit_node proc_desc ~f =
 
 let checker ({InterproceduralAnalysis.tenv; proc_desc; err_log} as analysis_data) =
   AbstractValue.State.reset () ;
-  begin
-    if not (PulseOperations.oracle_is_loaded ()) then
-      begin
-        L.debug Analysis Quiet "Load the oracle@\n";
-        match Dump.read ~f:(fun chan ->
-            L.debug Analysis Quiet "Load@\n";
-            let elems: (AbductiveDomain.t * string option) list = Marshal.from_channel chan in
-            let hash = Caml.Hashtbl.create (List.length elems) in
-            List.iter elems ~f:(fun (a,b) -> Caml.Hashtbl.add hash a b);
-            (* let elems: (AbductiveDomain.t, unit) Caml.Hashtbl.t = Marshal.from_channel chan in *)
-            hash) with
-        | Some(e) ->
-            L.debug Analysis Quiet "The oracle has been loaded %d@\n" (Caml.Hashtbl.length e);
-            PulseOperations.set_oracle e
-        | None -> ()
-      end
-  end;
   let initial_astate = ExecutionDomain.mk_initial tenv proc_desc in
   let initial = [initial_astate] in
   match DisjunctiveAnalyzer.compute_post analysis_data ~initial proc_desc with
