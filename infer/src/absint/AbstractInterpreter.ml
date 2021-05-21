@@ -328,6 +328,9 @@ struct
             (select sorted k)
       in
       (** until here ***)
+      (* let rec list_rev_append l1 l2 =
+       *   match l1 with hd :: tl -> list_rev_append tl (hd :: l2) | _ -> l2
+       * in *)
       let (`UnderApproximateAfter n) = DConfig.join_policy in
       let zi = 0 in
       let rec gen i lst =
@@ -338,6 +341,7 @@ struct
       fun fn_score node lhs rhs ->
       if phys_equal lhs rhs then lhs
       else
+        (* let list = list_rev_append rhs lhs in *)
         let list = lhs @ rhs in
         let len = List.length list in
         if len <= n then list
@@ -354,11 +358,11 @@ struct
           let scores_list = fn_score [| Py.List.of_list scores_list |] in
           let scores_list = Py.List.to_list_map Py.Float.to_float scores_list in
           (* discard similar states *)
-          let scores_list = List.fold_left scores_list ~init:[] ~f:(fun lst k ->
-              match List.find lst ~f:(Float.equal k) with
-              | Some(_) -> -10.::lst
-              | None -> k::lst)
-          in
+          (* let scores_list = List.fold_left scores_list ~init:[] ~f:(fun lst k ->
+           *     match List.find lst ~f:(Float.equal k) with
+           *     | Some(_) -> -10.::lst
+           *     | None -> k::lst)
+           * in *)
           select_top_k list scores_list n
 
     let join : t -> t -> t =
@@ -377,21 +381,12 @@ struct
 
   let exec_instr pre_disjuncts analysis_data node instr =
     List.foldi pre_disjuncts ~init:[] ~f:(fun i post_disjuncts pre_disjunct ->
-        let should_skip =
-          let (`UnderApproximateAfter n) = DConfig.join_policy in
-          List.length post_disjuncts >= n
-        in
-        (* TODO for ML by ysko.: It skips executing disjunctions when it reaches the limit. *)
-        if should_skip then (
-          L.d_printfln "@[<v2>Reached max disjuncts limit, skipping disjunct #%d@;@]" i ;
-          post_disjuncts )
-        else (
-          L.d_printfln "@[<v2>Executing instruction from disjunct #%d@;" i ;
-          let disjuncts' = T.exec_instr pre_disjunct analysis_data node instr in
-          ( if Config.write_html then
+        L.d_printfln "@[<v2>Executing instruction from disjunct #%d@;" i ;
+        let disjuncts' = T.exec_instr pre_disjunct analysis_data node instr in
+        ( if Config.write_html then
             let n = List.length disjuncts' in
             L.d_printfln "@]@\n@[Got %d disjunct%s back@]" n (if Int.equal n 1 then "" else "s") ) ;
-          Domain.sjoin node post_disjuncts disjuncts' ) )
+        Domain.sjoin node post_disjuncts disjuncts' )
 
   let exec_node_instrs old_state_opt ~exec_instr pre instrs node =
     let is_new_pre disjunct =
