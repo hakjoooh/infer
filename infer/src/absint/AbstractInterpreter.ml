@@ -381,12 +381,21 @@ struct
 
   let exec_instr pre_disjuncts analysis_data node instr =
     List.foldi pre_disjuncts ~init:[] ~f:(fun i post_disjuncts pre_disjunct ->
-        L.d_printfln "@[<v2>Executing instruction from disjunct #%d@;" i ;
-        let disjuncts' = T.exec_instr pre_disjunct analysis_data node instr in
-        ( if Config.write_html then
+        let should_skip =
+          let (`UnderApproximateAfter n) = DConfig.join_policy in
+          List.length post_disjuncts >= n
+        in
+        (* TODO for ML by ysko.: It skips executing disjunctions when it reaches the limit. *)
+        if should_skip then (
+          L.d_printfln "@[<v2>Reached max disjuncts limit, skipping disjunct #%d@;@]" i ;
+          post_disjuncts )
+        else (
+          L.d_printfln "@[<v2>Executing instruction from disjunct #%d@;" i ;
+          let disjuncts' = T.exec_instr pre_disjunct analysis_data node instr in
+          ( if Config.write_html then
             let n = List.length disjuncts' in
             L.d_printfln "@]@\n@[Got %d disjunct%s back@]" n (if Int.equal n 1 then "" else "s") ) ;
-        Domain.sjoin node post_disjuncts disjuncts' )
+          Domain.sjoin node post_disjuncts disjuncts' ) )
 
   let exec_node_instrs old_state_opt ~exec_instr pre instrs node =
     let is_new_pre disjunct =
