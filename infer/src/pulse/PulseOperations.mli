@@ -209,3 +209,5 @@ val get_captured_actuals :
 
 (** interfaces for ML *)
 val transition: string option -> MLVector.t option -> ExecutionDomain.t -> ExecutionDomain.t -> unit
+val add_transition: string option -> MLVector.t option -> t -> t -> unit
+val dump_traces_for_ml: Diagnostic.t -> t -> unit

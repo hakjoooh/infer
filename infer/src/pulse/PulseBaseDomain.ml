@@ -322,45 +322,19 @@ let subst_var subst ({heap; stack; attrs} as astate) =
   else {heap= heap'; stack= stack'; attrs= attrs'}
 
 (** for ML *)
-let num_of_must_be_valid base =
+let count fattr base =
   AddressAttributes.fold (fun _ attrs i ->
-      if Attributes.get_must_be_valid attrs
-         |> Option.is_some
+      if fattr attrs |> Option.is_some
       then i + 1
       else i)
     base.attrs 0
-
-let num_of_written_to base =
-  AddressAttributes.fold (fun _ attrs i ->
-      if Attributes.get_written_to attrs
-         |> Option.is_some
-      then i + 1
-      else i)
-    base.attrs 0
-
-let num_of_must_be_initialized base =
-  AddressAttributes.fold (fun _ attrs i ->
-      if Attributes.get_must_be_initialized attrs
-         |> Option.is_some
-      then i + 1
-      else i)
-    base.attrs 0
-
-let num_of_invalids base =
-  AddressAttributes.fold (fun _ attrs i ->
-      if Attributes.get_invalid attrs
-         |> Option.is_some
-      then i + 1
-      else i)
-    base.attrs 0
-
-let num_of_allocated base =
-  AddressAttributes.fold (fun _ attrs i ->
-      if Attributes.get_allocation attrs
-         |> Option.is_some
-      then i + 1
-      else i)
-    base.attrs 0
+  
+let num_of_must_be_valid = count Attributes.get_must_be_valid
+let num_of_written_to = count Attributes.get_written_to
+let num_of_must_be_initialized = count Attributes.get_must_be_initialized
+let num_of_invalids = count Attributes.get_invalid
+let num_of_allocated = count Attributes.get_allocation
+let num_of_stack_var_addresses = count Attributes.get_address_of_stack_variable
 
 (* type t = {heap: Memory.t; stack: Stack.t; attrs: AddressAttributes.t} *)
 let feature_vector t =
@@ -371,5 +345,6 @@ let feature_vector t =
   let v5 = num_of_invalids t in
   let v6 = num_of_allocated t in
   let v7 = Stack.cardinal t.stack in
-  [v1; v2; v3; v4; v5; v6; v7]
+  let v8 = num_of_stack_var_addresses t in
+  [v1; v2; v3; v4; v5; v6; v7; v8]
 

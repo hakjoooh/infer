@@ -79,11 +79,13 @@ module PulseTransferFunctions = struct
   let exec_object_out_of_scope call_loc (pvar, typ) exec_state =
     match (exec_state : ExecutionDomain.t) with
     | ContinueProgram astate ->
+        let orig = astate in
         let gone_out_of_scope = Invalidation.GoneOutOfScope (pvar, typ) in
         let* astate, out_of_scope_base =
           PulseOperations.eval NoAccess call_loc (Exp.Lvar pvar) astate
         in
         (* invalidate [&x] *)
+        PulseOperations.add_transition None None orig astate;
         PulseOperations.invalidate call_loc gone_out_of_scope out_of_scope_base astate
         >>| ExecutionDomain.continue
     | ISLLatentMemoryError _
@@ -296,6 +298,7 @@ module PulseTransferFunctions = struct
       | Store {e1= lhs_exp; e2= rhs_exp; loc} ->
           (* [*lhs_exp := rhs_exp] *)
           let event = ValueHistory.Assignment loc in
+          let orig = astate in
           let result =
             let<*> astate, (rhs_addr, rhs_history) =
               PulseOperations.eval NoAccess loc rhs_exp astate
@@ -307,6 +310,7 @@ module PulseTransferFunctions = struct
                 (false, [Ok (astate, lhs_addr_hist)])
             in
             let write_function lhs_addr_hist astate =
+              PulseOperations.add_transition None None orig astate;
               if is_structured then
                 PulseOperations.write_deref_biad_isl loc ~ref:lhs_addr_hist Dereference
                   ~obj:(rhs_addr, event :: rhs_history)
@@ -332,6 +336,7 @@ module PulseTransferFunctions = struct
             | Lvar pvar when Pvar.is_return pvar ->
                 List.map astates ~f:(fun result ->
                     let* astate = result in
+                    PulseOperations.add_transition None None orig astate;
                     PulseOperations.check_address_escape loc proc_desc rhs_addr rhs_history astate )
             | _ ->
                 astates

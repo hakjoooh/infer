@@ -19,36 +19,45 @@ module ASet = AbductiveDomain.Set
 module AMap = AbductiveDomain.Map
 
 (* out -> in Hashtbl.t *)
-let edges = Hashtbl.create 10000
-let list = ref AMap.empty
-let features = Hashtbl.create 100000
+let edges = Hashtbl.create 500000
+let list = ref (AMap.empty, AMap.empty)
+let features = Hashtbl.create 500000
 
 let add_feature vs a =
       match vs with
       | Some (vs) ->
-          let ntbl = 
-            match Hashtbl.find_opt features a with
-            | Some(tbl) -> tbl
-            | None -> MLVector.Set.empty
-          in
+          let ntbl = try Hashtbl.find features a with _ -> MLVector.Set.empty in
           let ntbl = MLVector.Set.add vs ntbl in
           Hashtbl.add features a ntbl
+          (* features := AMap.add a ntbl !features *)
       | None -> ()
   
+(**
+   - i: string option (for debugging)
+   - vs: feature vectors for program point
+   - a: from
+   - b: to
+*)
 let add_transition i vs (a: t) (b: t) =
   if Config.pulse_train_mode then
     begin
+      if Config.debug_mode then
+        begin
+          Option.iter i ~f:(L.debug Analysis Quiet "instr - %s@\n");
+          L.debug Analysis Quiet "transition from@\n%a@\n" AbductiveDomain.pp a;
+          L.debug Analysis Quiet "transition to@\n%a@\n" AbductiveDomain.pp b;
+        end;
       add_feature vs a;
       add_feature vs b;
-      if AbductiveDomain.equal a b then ()
-      else if Hashtbl.mem edges b then
-          Hashtbl.add (Hashtbl.find edges b) a i
+      if AbductiveDomain.equal a b then
+        ()
       else
-        begin
-          let ntbl = Hashtbl.create 100 in
-          Hashtbl.add ntbl a i;
-          Hashtbl.add edges b ntbl
-        end
+        let prevs =
+          if Hashtbl.mem edges b then Hashtbl.find edges b
+          else Hashtbl.create 5
+        in
+        Hashtbl.add prevs a i;
+        Hashtbl.add edges b prevs
     end
 
 let get_astate: ExecutionDomain.t -> AbductiveDomain.t = function
@@ -64,61 +73,61 @@ let transition (i: string option) (vs: MLVector.t option) (a: ExecutionDomain.t)
   (** TODO: ExecutionDomain *)
   let aa = get_astate a in
   let bb = get_astate b in
-  if Config.debug_mode then
-    begin
-      Option.iter i ~f:(L.debug Analysis Quiet "instr - %s@\n");
-      L.debug Analysis Quiet "transition from@\n%a@\n" ExecutionDomain.pp a;
-      L.debug Analysis Quiet "transition to@\n%a@\n" ExecutionDomain.pp b;
-    end;
   add_transition i vs aa bb
 
-let reachable a visited =
-  let rec iter a depth visited =
-    if AMap.mem a visited then
-      visited
+let reachable a (visited_map, visited_cnt) =
+  let rec iter a depth (visited_map, visited_cnt) visited =
+    if ASet.mem a visited then
+      (visited_map, visited_cnt, visited)
     else
       let vs =
         match Hashtbl.find_opt features a with
         | Some (vs) -> vs
         | None -> MLVector.Set.empty
       in
-      let visited = AMap.add a vs visited in
+      let visited_map = AMap.add a vs visited_map in
+      let visited_cnt = AMap.add a ((try (AMap.find a visited_cnt) with _ -> 0) + 1) visited_cnt in
+      let visited = ASet.add a visited in
       match Hashtbl.find_opt edges a with
       | Some s ->
-          Hashtbl.fold (fun a i visited ->
-              if Config.debug_mode then
-                begin
-                  Option.iter i ~f:(fun x ->
-                      L.debug Analysis Quiet "instr to %s@\n" x);
-                  L.debug Analysis Quiet "found - %d@\n%a@\n" depth AbductiveDomain.pp a
-                end;
-              iter a (depth + 1) visited) s visited
+          Hashtbl.fold (fun a _i (visited_map,visited_cnt,visited) ->
+              (* if Config.debug_mode then
+               *   begin
+               *     Option.iter i ~f:(fun x ->
+               *         L.debug Analysis Quiet "instr to %s@\n" x);
+               *     L.debug Analysis Quiet "found - %d@\n%a@\n" depth AbductiveDomain.pp a
+               *   end; *)
+              iter a (depth + 1) (visited_map, visited_cnt) visited) s (visited_map, visited_cnt, visited)
       | None -> 
           if Config.debug_mode then
             L.debug Analysis Quiet "found none edges@\n";
-          visited
+          (visited_map, visited_cnt, visited)
   in
   if Config.debug_mode then
     L.debug Analysis Quiet "search start@\n%a@\n" AbductiveDomain.pp a;
-  let visited = iter a 0 visited in
+  let (visited_map, visited_cnt, visited) = iter a 0 (visited_map,visited_cnt) ASet.empty in
   if Config.debug_mode then
-    L.debug Analysis Quiet "reachable set: %s@\n" (string_of_int (AMap.cardinal visited));
-  visited
+    L.debug Analysis Quiet "reachable set: %s@\n" (string_of_int (ASet.cardinal visited));
+  (visited_map, visited_cnt)
 
 let close () =
   if Config.pulse_train_mode then
-    let notoks =
+    let all =
       Hashtbl.fold (fun k v lst ->
           Hashtbl.fold (fun k _ lst -> ASet.add k lst) v (ASet.add k lst))
-        edges ASet.empty in
-    let is_unreachable s = not (AMap.mem s !list) in
-    let notoks = ASet.filter is_unreachable notoks in
+        edges ASet.empty
+    in
+    let reachable_map = fst !list in
+    let cnt_map = snd !list in
+    let is_unreachable s = not (AMap.mem s reachable_map) in
+    let unreachables = ASet.filter is_unreachable all in
     let set_ok =
       AMap.fold (fun m s set ->
           MLVector.Set.fold (fun k set ->
               let vector_state = MLVector.vector (AbductiveDomain.feature_vector m) in
               let vector = MLVector.concat k vector_state in
-              MLVector.Set.add vector set) s set) !list MLVector.Set.empty
+              let count = AMap.find m cnt_map in
+              MLVector.Map.add vector count set) s set) reachable_map MLVector.Map.empty
     in
     let set_notok =
       AbductiveDomain.Set.fold (fun m set ->
@@ -130,10 +139,13 @@ let close () =
         MLVector.Set.fold (fun k set ->
             let vector_state = MLVector.vector (AbductiveDomain.feature_vector m) in
             let vector = MLVector.concat k vector_state in
-            MLVector.Set.add vector set) s set) notoks MLVector.Set.empty
+            (* if MLVector.Map.mem vector set_ok then set
+             * else *)
+              MLVector.Set.add vector set
+          ) s set) unreachables MLVector.Set.empty
     in
     Dump.finalize_for_training (fun println ->
-        MLVector.Set.iter (fun vector ->
+        MLVector.Map.iter (fun vector _i ->
             println "%a %d" MLVector.pp vector 1) set_ok;
         MLVector.Set.iter (fun vector ->
             println "%a %d" MLVector.pp vector (-1)) set_notok)
@@ -141,22 +153,20 @@ let close () =
 let () = Epilogues.register ~f:close ~description:"flushing dumps and closing dump file"
 
 
-(* let diagnostics = Hashtbl.create 10000 *)
+let diagnostics = Hashtbl.create 10000
 
 let dump_traces_for_ml _diag astate = 
   (* TODO: All the abstract states reachable here is the ContinueProgram type. *) 
   if Config.pulse_train_mode then
-    (** TODO: should we compute all reachable states? *)
-    list := reachable astate !list
-    (* begin
-     *   if not (Hashtbl.mem diagnostics diag) then
-     *     begin
-     *       Hashtbl.add diagnostics diag ();
-     *       list := reachable astate !list
-     *     end
-     *   else
-     *     list := reachable astate !list
-     * end *)
+    begin
+      if not (Hashtbl.mem diagnostics _diag) then
+        begin
+          Hashtbl.add diagnostics _diag ();
+          list := reachable astate !list
+        end
+      (* else
+       * list := reachable astate !list *)
+    end
 
 module Import = struct
   type access_mode = Read | Write | NoAccess
@@ -411,7 +421,9 @@ let prune location ~condition astate =
 
 
 let eval_deref location exp astate =
+  let orig = astate in
   let* astate, addr_hist = eval Read location exp astate in
+  add_transition None None orig astate;
   let+ astate = check_addr_access Read location addr_hist astate in
   Memory.eval_edge addr_hist Dereference astate
 
@@ -525,7 +537,9 @@ let invalidate_biad_isl location cause (address, history) astate =
 
 
 let invalidate_access location cause ref_addr_hist access astate =
+  let orig = astate in
   let astate, (addr_obj, _) = Memory.eval_edge ref_addr_hist access astate in
+  add_transition None None orig astate;
   invalidate location cause (addr_obj, snd ref_addr_hist) astate
 
 

@@ -625,11 +625,10 @@ let check_all_valid callee_proc_name call_location {AbductiveDomain.pre; _} call
             AddressAttributes.check_valid access_trace addr_caller astate
             |> Result.map_error ~f:(fun (invalidation, invalidation_trace) ->
                    L.d_printfln "ERROR: caller's %a invalid!" AbstractValue.pp addr_caller ;
-                   AccessResult.ReportableError
-                     { diagnostic=
-                         Diagnostic.AccessToInvalidAddress
-                           {calling_context= []; invalidation; invalidation_trace; access_trace}
-                     ; astate } )
+                   let diagnostic = Diagnostic.AccessToInvalidAddress
+                           {calling_context= []; invalidation; invalidation_trace; access_trace} in
+                   PulseOperations.dump_traces_for_ml diagnostic astate;
+                   AccessResult.ReportableError { diagnostic; astate } )
       in
       match BaseAddressAttributes.get_must_be_initialized addr_pre (pre :> BaseDomain.t).attrs with
       | None ->
@@ -639,10 +638,9 @@ let check_all_valid callee_proc_name call_location {AbductiveDomain.pre; _} call
           AddressAttributes.check_initialized access_trace addr_caller astate
           |> Result.map_error ~f:(fun () ->
                  L.d_printfln "ERROR: caller's %a is uninitialized!" AbstractValue.pp addr_caller ;
-                 AccessResult.ReportableError
-                   { diagnostic=
-                       Diagnostic.ReadUninitializedValue {calling_context= []; trace= access_trace}
-                   ; astate } ) )
+                 let diagnostic = Diagnostic.ReadUninitializedValue {calling_context= []; trace= access_trace} in
+                 PulseOperations.dump_traces_for_ml diagnostic astate;
+                 AccessResult.ReportableError { diagnostic; astate } ) )
     call_state.subst (Ok call_state.astate)
 
 
@@ -674,12 +672,12 @@ let isl_check_all_invalid invalid_addr_callers callee_proc_name call_location
           | Some (_, callee_access_trace) ->
               let access_trace = mk_access_trace callee_access_trace in
               L.d_printfln "ERROR: caller's %a invalid!" AbstractValue.pp addr_caller ;
+              let diagnostic = Diagnostic.AccessToInvalidAddress
+                         {calling_context= []; invalidation; invalidation_trace; access_trace} in
+              PulseOperations.dump_traces_for_ml diagnostic astate;
               Error
                 (AccessResult.ReportableError
-                   { diagnostic=
-                       Diagnostic.AccessToInvalidAddress
-                         {calling_context= []; invalidation; invalidation_trace; access_trace}
-                   ; astate }) ) ) )
+                   { diagnostic; astate }) ) ) )
     invalid_addr_callers (Ok astate)
 
 

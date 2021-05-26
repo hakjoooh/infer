@@ -20,3 +20,4 @@ module Key = struct
 end
 
 module Set = Caml.Set.Make(Key)
+module Map = Caml.Map.Make(Key)

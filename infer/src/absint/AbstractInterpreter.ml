@@ -328,9 +328,6 @@ struct
             (select sorted k)
       in
       (** until here ***)
-      (* let rec list_rev_append l1 l2 =
-       *   match l1 with hd :: tl -> list_rev_append tl (hd :: l2) | _ -> l2
-       * in *)
       let (`UnderApproximateAfter n) = DConfig.join_policy in
       let zi = 0 in
       let rec gen i lst =
@@ -341,7 +338,6 @@ struct
       fun fn_score node lhs rhs ->
       if phys_equal lhs rhs then lhs
       else
-        (* let list = list_rev_append rhs lhs in *)
         let list = lhs @ rhs in
         let len = List.length list in
         if len <= n then list
@@ -357,12 +353,6 @@ struct
           in
           let scores_list = fn_score [| Py.List.of_list scores_list |] in
           let scores_list = Py.List.to_list_map Py.Float.to_float scores_list in
-          (* discard similar states *)
-          (* let scores_list = List.fold_left scores_list ~init:[] ~f:(fun lst k ->
-           *     match List.find lst ~f:(Float.equal k) with
-           *     | Some(_) -> -10.::lst
-           *     | None -> k::lst)
-           * in *)
           select_top_k list scores_list n
 
     let join : t -> t -> t =

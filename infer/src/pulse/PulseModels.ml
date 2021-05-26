@@ -581,10 +581,11 @@ module StdFunction = struct
       let event = ValueHistory.Call {f= Model "std::function::operator()"; location; in_call= []} in
       [PulseOperations.havoc_id ret_id [event] astate]
     in
-    let<*> astate, (lambda, _) =
+    let<*> astate2, (lambda, _) =
       PulseOperations.eval_access Read location lambda_ptr_hist Dereference astate
     in
-    let<*> astate = PulseOperations.Closures.check_captured_addresses location lambda astate in
+    let _ = PulseOperations.add_transition None None astate astate2 in
+    let<*> astate = PulseOperations.Closures.check_captured_addresses location lambda astate2 in
     match AddressAttributes.get_closure_proc_name lambda astate with
     | None ->
         (* we don't know what proc name this lambda resolves to *)
@@ -677,12 +678,10 @@ module GenericArrayBackedCollectionIterator = struct
       if AddressAttributes.is_end_of_collection (fst pointer) astate && not is_minus_minus then
         let invalidation_trace = Trace.Immediate {location; history= []} in
         let access_trace = Trace.Immediate {location; history= snd pointer} in
-        Error
-          (ReportableError
-             { diagnostic=
-                 Diagnostic.AccessToInvalidAddress
-                   {calling_context= []; invalidation= EndIterator; invalidation_trace; access_trace}
-             ; astate })
+        let diagnostic = Diagnostic.AccessToInvalidAddress
+            {calling_context= []; invalidation= EndIterator; invalidation_trace; access_trace} in
+        PulseOperations.dump_traces_for_ml diagnostic astate;
+        Error (ReportableError { diagnostic; astate })
       else Ok astate
     in
     (* We do not want to create internal array if iterator pointer has an invalid value *)

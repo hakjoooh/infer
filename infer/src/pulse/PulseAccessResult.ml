@@ -39,10 +39,8 @@ let of_abductive_result abductive_result = Result.map_error abductive_result ~f:
 let of_abductive_access_result access_trace abductive_result =
   Result.map_error abductive_result ~f:(function
     | `InvalidAccess (invalidation, invalidation_trace, astate) ->
-        ReportableError
-          { astate
-          ; diagnostic=
-              AccessToInvalidAddress
-                {calling_context= []; invalidation; invalidation_trace; access_trace} }
+        let diagnostic = Diagnostic.AccessToInvalidAddress
+                {calling_context= []; invalidation; invalidation_trace; access_trace} in
+        ReportableError { astate; diagnostic }
     | (`ISLError _ | `PotentialInvalidAccess _ | `PotentialInvalidAccessSummary _) as error ->
         of_abductive_error error )

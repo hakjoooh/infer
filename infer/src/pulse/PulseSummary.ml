@@ -38,15 +38,14 @@ let exec_summary_of_post_common tenv ~continue_program proc_desc err_log
       | None ->
           Some (LatentInvalidAccess {astate; address; must_be_valid; calling_context= []})
       | Some (invalidation, invalidation_trace) ->
-          PulseReport.report_summary_error tenv proc_desc err_log
-            (ReportableError
-               { diagnostic=
-                   AccessToInvalidAddress
+          let diagnostic = Diagnostic.AccessToInvalidAddress
                      { calling_context= []
                      ; invalidation
                      ; invalidation_trace
-                     ; access_trace= must_be_valid }
-               ; astate })
+                     ; access_trace= must_be_valid } in
+          PulseOperations.dump_traces_for_ml diagnostic (astate :> AbductiveDomain.t);
+          PulseReport.report_summary_error tenv proc_desc err_log
+            (ReportableError { diagnostic; astate })
           |> Option.some ) )
   (* already a summary but need to reconstruct the variants to make the type system happy :( *)
   | AbortProgram astate ->

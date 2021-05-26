@@ -140,6 +140,7 @@ let apply_callee tenv ~caller_proc_desc callee_pname call_loc callee_exec_state 
                 | `DelayReport latent_issue ->
                     Sat (Ok (LatentAbortProgram {astate= astate_summary; latent_issue}))
                 | `ReportNow ->
+                    PulseOperations.dump_traces_for_ml diagnostic (astate_summary :> AbductiveDomain.t);
                     Sat
                       (Error
                          (ReportableError {diagnostic; astate= (astate_summary :> AbductiveDomain.t)}))
@@ -165,15 +166,17 @@ let apply_callee tenv ~caller_proc_desc callee_pname call_loc callee_exec_state 
                            (LatentInvalidAccess
                               {astate= astate_summary; address; must_be_valid; calling_context}))
                   | Some (invalidation, invalidation_trace) ->
-                      Sat
-                        (Error
-                           (ReportableError
-                              { diagnostic=
-                                  AccessToInvalidAddress
+                      let diagnostic = Diagnostic.AccessToInvalidAddress
                                     { calling_context
                                     ; invalidation
                                     ; invalidation_trace
-                                    ; access_trace= must_be_valid }
+                                    ; access_trace= must_be_valid } in
+                      PulseOperations.dump_traces_for_ml diagnostic astate;
+                      Sat
+                        (Error
+                           (ReportableError
+                              { diagnostic
+                                  
                               ; astate= (astate_summary :> AbductiveDomain.t) })) ) ) ) )
   | ISLLatentMemoryError astate ->
       map_call_result ~is_isl_error_prepost:true

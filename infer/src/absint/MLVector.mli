@@ -9,3 +9,4 @@ val vector : int list -> t
 val to_list : t -> int list
 
 module Set : Caml.Set.S with type elt = t
+module Map : Caml.Map.S with type key = t
