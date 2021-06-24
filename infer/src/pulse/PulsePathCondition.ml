@@ -39,6 +39,19 @@ module BoItvs = struct
         in
         let v = Itv.ItvPure.subst_vars map_i v in
         add k v m) bo_itvs empty
+
+  let feature_vector bo_itvs =
+    let to_num b = if b then 1 else 0 in
+    let cnf f = fold (fun _ v c -> c + (f v |> to_num)) bo_itvs 0 in
+    let v0 = cnf Itv.ItvPure.is_finite in
+    let v1 = cnf Itv.ItvPure.is_invalid in
+    let v2 = cnf Itv.ItvPure.is_lb_infty in
+    let v3 = cnf Itv.ItvPure.is_nat in
+    let v4 = cnf Itv.ItvPure.is_symbolic in
+    let v5 = cnf Itv.ItvPure.is_top in
+    let v6 = cnf Itv.ItvPure.is_zero in
+    let v7 = cnf Itv.ItvPure.is_one in
+    [v0; v1; v2; v3; v4; v5; v6; v7]
 end
 
 module CItvs = struct
@@ -243,7 +256,17 @@ let and_bo_itvs_callee subst bo_itvs_caller bo_itvs_callee =
         | Some _, None ->
             bo_itv
         | _, Some bo_itv_callee ->
-            Some (and_bo_itv_callee bo_itvs_caller subst_ref bo_itv_callee) )
+            let v =
+              match and_bo_itv_callee bo_itvs_caller subst_ref bo_itv_callee with
+              | exception Contradiction ->
+                  L.d_printfln "* merge goes to Bottom - ysko: %a %a %a"
+                    AbstractValue.pp _v_caller
+                    BoItvs.pp bo_itvs_caller
+                    BoItvs.pp bo_itvs_callee;
+                  raise Contradiction
+              | s -> s
+            in 
+            Some v )
       bo_itvs_caller bo_itvs_callee_renamed
   in
   (!subst_ref, bo_itvs')
@@ -501,3 +524,9 @@ let is_unsat_expensive tenv ~get_dynamic_type phi =
 let has_no_assumptions phi = Formula.has_no_assumptions phi.formula
 
 let get_var_repr phi v = Formula.get_var_repr phi.formula v
+
+(** for ML *)
+let feature_vector phi =
+  let v1 = if phi.is_unsat then 1 else 0 in
+  let vs1 = BoItvs.feature_vector phi.bo_itvs in
+  [v1] @ vs1

@@ -93,3 +93,6 @@ val get_var_repr : t -> AbstractValue.t -> AbstractValue.t
 val subst_vars : AbstractValue.t AbstractValue.Map.t -> t -> t
 
 val eliminate : keep:AbstractValue.Set.t -> t -> t
+
+(** ML feature vectors *)
+val feature_vector : t -> int list

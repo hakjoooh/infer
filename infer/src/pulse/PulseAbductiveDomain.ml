@@ -921,6 +921,7 @@ let skipped_calls astate = SkippedCalls.cardinal astate.skipped_calls
 let feature_vector astate =
   let pre_vs = BaseDomain.feature_vector (astate.pre :> BaseDomain.t) in
   let post_vs = BaseDomain.feature_vector (astate.post :> BaseDomain.t) in
+  let path_vs = PathCondition.feature_vector astate.path_condition in
   let v1 = diff_stack_vars astate in
   let v2 = skipped_calls astate in
-  pre_vs @ post_vs @ [v1; v2]
+  path_vs @ pre_vs @ post_vs @ [v1; v2]

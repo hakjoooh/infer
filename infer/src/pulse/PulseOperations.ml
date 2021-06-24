@@ -38,27 +38,30 @@ let add_feature vs a =
    - a: from
    - b: to
 *)
-let add_transition i vs (a: t) (b: t) =
+let add_transition =
   if Config.pulse_train_mode then
     begin
-      if Config.debug_mode then
-        begin
-          Option.iter i ~f:(L.debug Analysis Quiet "instr - %s@\n");
-          L.debug Analysis Quiet "transition from@\n%a@\n" AbductiveDomain.pp a;
-          L.debug Analysis Quiet "transition to@\n%a@\n" AbductiveDomain.pp b;
-        end;
-      add_feature vs a;
-      add_feature vs b;
-      if AbductiveDomain.equal a b then
-        ()
-      else
-        let prevs =
-          if Hashtbl.mem edges b then Hashtbl.find edges b
-          else Hashtbl.create 5
-        in
-        Hashtbl.add prevs a i;
-        Hashtbl.add edges b prevs
+      fun i vs (a: t) (b: t) ->
+        if Config.debug_mode then
+          begin
+            Option.iter i ~f:(L.debug Analysis Quiet "instr - %s@\n");
+            L.debug Analysis Quiet "transition from@\n%a@\n" AbductiveDomain.pp a;
+            L.debug Analysis Quiet "transition to@\n%a@\n" AbductiveDomain.pp b;
+          end;
+        add_feature vs a;
+        add_feature vs b;
+        if AbductiveDomain.equal a b then
+          ()
+        else
+          let prevs =
+            if Hashtbl.mem edges b then Hashtbl.find edges b
+            else Hashtbl.create 5
+          in
+          Hashtbl.add prevs a i;
+          Hashtbl.add edges b prevs
     end
+  else
+    fun _ _ _ _ -> ()
 
 let get_astate: ExecutionDomain.t -> AbductiveDomain.t = function
   | ContinueProgram astate -> astate
@@ -69,12 +72,16 @@ let get_astate: ExecutionDomain.t -> AbductiveDomain.t = function
   | ISLLatentMemoryError astate ->
       (astate :> AbductiveDomain.t)
 
-let transition (i: string option) (vs: MLVector.t option) (a: ExecutionDomain.t) (b: ExecutionDomain.t) = 
-  (** TODO: ExecutionDomain *)
-  let aa = get_astate a in
-  let bb = get_astate b in
-  add_transition i vs aa bb
-
+let transition =
+  if Config.pulse_train_mode then
+    fun (i: string option) (vs: MLVector.t option) (a: ExecutionDomain.t) (b: ExecutionDomain.t) ->
+      (** TODO: ExecutionDomain *)
+      let aa = get_astate a in
+      let bb = get_astate b in
+      add_transition i vs aa bb
+  else
+    fun _ _ _ _ -> ()
+                   
 let reachable a (visited_map, visited_cnt) =
   let rec iter a depth (visited_map, visited_cnt) visited =
     if ASet.mem a visited then
@@ -155,18 +162,21 @@ let () = Epilogues.register ~f:close ~description:"flushing dumps and closing du
 
 let diagnostics = Hashtbl.create 10000
 
-let dump_traces_for_ml _diag astate = 
-  (* TODO: All the abstract states reachable here is the ContinueProgram type. *) 
+let dump_traces_for_ml =
   if Config.pulse_train_mode then
-    begin
-      if not (Hashtbl.mem diagnostics _diag) then
-        begin
-          Hashtbl.add diagnostics _diag ();
-          list := reachable astate !list
-        end
-      (* else
-       * list := reachable astate !list *)
-    end
+    fun _diag astate ->
+      (* TODO: All the abstract states reachable here is the ContinueProgram type. *) 
+      begin
+        if not (Hashtbl.mem diagnostics _diag) then
+          begin
+            Hashtbl.add diagnostics _diag ();
+            list := reachable astate !list
+          end
+          (* else
+           * list := reachable astate !list *)
+      end
+  else
+    fun _ _ -> ()
 
 module Import = struct
   type access_mode = Read | Write | NoAccess
@@ -658,7 +668,16 @@ let check_memory_leak_unreachable unreachable_addrs location astate =
   List.fold unreachable_addrs ~init:(Ok ()) ~f:(fun res addr ->
       match AbductiveDomain.AddressAttributes.find_opt addr astate with
       | Some unreachable_attrs ->
-          check_memory_leak res unreachable_attrs
+          let r = check_memory_leak res unreachable_attrs in
+          begin
+            match r with
+            | Error _ ->
+                L.d_printfln "* ysko: %a" AbstractValue.pp addr;
+                L.debug Analysis Quiet "* ysko: %a@\n" AbstractValue.pp addr
+            | _ -> ()
+          end;
+          r
+
       | None ->
           res )
 
@@ -710,6 +729,7 @@ let remove_vars tenv vars location orig_astate =
   if phys_equal astate' astate then Ok astate
   else
     let astate, _, unreachable_addrs = AbductiveDomain.discard_unreachable astate' in
+    L.d_printfln "* removed - ysko: %a" AbductiveDomain.pp astate';
     let+ () = check_memory_leak_unreachable unreachable_addrs location orig_astate in
     astate
 
