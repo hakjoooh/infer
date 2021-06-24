@@ -256,17 +256,7 @@ let and_bo_itvs_callee subst bo_itvs_caller bo_itvs_callee =
         | Some _, None ->
             bo_itv
         | _, Some bo_itv_callee ->
-            let v =
-              match and_bo_itv_callee bo_itvs_caller subst_ref bo_itv_callee with
-              | exception Contradiction ->
-                  L.d_printfln "* merge goes to Bottom - ysko: %a %a %a"
-                    AbstractValue.pp _v_caller
-                    BoItvs.pp bo_itvs_caller
-                    BoItvs.pp bo_itvs_callee;
-                  raise Contradiction
-              | s -> s
-            in 
-            Some v )
+            Some (and_bo_itv_callee bo_itvs_caller subst_ref bo_itv_callee) )
       bo_itvs_caller bo_itvs_callee_renamed
   in
   (!subst_ref, bo_itvs')
