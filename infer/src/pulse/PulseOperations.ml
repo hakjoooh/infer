@@ -668,16 +668,7 @@ let check_memory_leak_unreachable unreachable_addrs location astate =
   List.fold unreachable_addrs ~init:(Ok ()) ~f:(fun res addr ->
       match AbductiveDomain.AddressAttributes.find_opt addr astate with
       | Some unreachable_attrs ->
-          let r = check_memory_leak res unreachable_attrs in
-          begin
-            match r with
-            | Error _ ->
-                L.d_printfln "* ysko: %a" AbstractValue.pp addr;
-                L.debug Analysis Quiet "* ysko: %a@\n" AbstractValue.pp addr
-            | _ -> ()
-          end;
-          r
-
+          check_memory_leak res unreachable_attrs
       | None ->
           res )
 
@@ -729,7 +720,6 @@ let remove_vars tenv vars location orig_astate =
   if phys_equal astate' astate then Ok astate
   else
     let astate, _, unreachable_addrs = AbductiveDomain.discard_unreachable astate' in
-    L.d_printfln "* removed - ysko: %a" AbductiveDomain.pp astate';
     let+ () = check_memory_leak_unreachable unreachable_addrs location orig_astate in
     astate
 
