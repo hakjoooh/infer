@@ -668,7 +668,15 @@ let check_memory_leak_unreachable unreachable_addrs location astate =
   List.fold unreachable_addrs ~init:(Ok ()) ~f:(fun res addr ->
       match AbductiveDomain.AddressAttributes.find_opt addr astate with
       | Some unreachable_attrs ->
-          check_memory_leak res unreachable_attrs
+          let r = check_memory_leak res unreachable_attrs in
+          begin
+            if Config.debug_mode then
+              match r with
+              | Error _ ->
+                  L.d_printfln "* ysko: leaked address: %a" AbstractValue.pp addr
+              | _ -> ()
+          end;
+          r
       | None ->
           res )
 

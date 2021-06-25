@@ -87,3 +87,6 @@ module DynamicTypes : sig
 end
 
 val subst_vars : Var.t Var.Map.t -> t -> t
+
+(* for ML *)
+val feature_vector : t -> int list

@@ -51,7 +51,9 @@ module BoItvs = struct
     let v5 = cnf Itv.ItvPure.is_top in
     let v6 = cnf Itv.ItvPure.is_zero in
     let v7 = cnf Itv.ItvPure.is_one in
-    [v0; v1; v2; v3; v4; v5; v6; v7]
+    let v8 = cnf Itv.ItvPure.is_ge_zero in
+    let v9 = cnf Itv.ItvPure.is_le_zero in
+    [v0; v1; v2; v3; v4; v5; v6; v7; v8; v9]
 end
 
 module CItvs = struct
@@ -66,6 +68,13 @@ module CItvs = struct
           | None -> k
         in
         add k v m) m empty
+
+  let feature_vector citvs =
+    let to_num b = if b then 1 else 0 in
+    let cnf f = fold (fun _ v c -> c + (f v |> to_num)) citvs 0 in
+    let v0 = cnf CItv.is_equal_to_zero in
+    let v1 = cnf CItv.is_not_equal_to_zero in
+    [v0; v1]
 end
 (** A mash-up of several arithmetic domains. At the moment they are independent, i.e. we don't use
     facts deduced by one domain to inform another. *)
@@ -519,4 +528,6 @@ let get_var_repr phi v = Formula.get_var_repr phi.formula v
 let feature_vector phi =
   let v1 = if phi.is_unsat then 1 else 0 in
   let vs1 = BoItvs.feature_vector phi.bo_itvs in
-  [v1] @ vs1
+  let vs2 = CItvs.feature_vector phi.citvs in
+  let vs3 = Formula.feature_vector phi.formula in
+  [v1] @ vs1 @ vs2 @ vs3

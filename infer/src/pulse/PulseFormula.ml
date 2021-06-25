@@ -1157,22 +1157,6 @@ module Formula = struct
     ; term_eqs= phi.term_eqs (* TODO *)
     ; atoms }
 
-  (* let rewrite phi o_v n_v =
-   *   let var_eqs = phi.var_eqs in
-   *   let var_eqs = VarUF.apply_subst (Var.Map.add o_v n_v Var.Map.empty) var_eqs in
-   *   let linear_eqs = phi.linear_eqs in
-   *   let linear_eqs =
-   *     Var.Map.fold (fun k v m ->
-   *         let k = if Var.equal k o_v then n_v else k in
-   *         let v = LinArith.subst o_v n_v v in
-   *         Var.Map.add k v m) linear_eqs Var.Map.empty in
-   *   let atoms = phi.atoms in
-   *   let atoms = Atom.Set.map (fun v -> Atom.rewrite o_v (VarSubst n_v) v) atoms in
-   *   { var_eqs
-   *   ; linear_eqs
-   *   ; atoms } *)
-
-
   let pp_with_pp_var pp_var fmt phi =
     let pp_linear_eqs fmt m =
       if Var.Map.is_empty m then F.pp_print_string fmt "true (no linear)"
@@ -1558,6 +1542,14 @@ module Formula = struct
       (* [φ ⊢ a] iff [φ ∧ ¬a] is inconsistent *)
       match and_atom (Atom.nnot atom) (phi, []) with Sat _ -> false | Unsat -> true
   end
+
+  (* for ML *)
+  let feature_vector phi = (* TODO *)
+    let v1 = VarUF.fold_congruences phi.var_eqs ~init:0 ~f:(fun acc _ -> acc + 1) in
+    let v2 = Var.Map.cardinal phi.linear_eqs in
+    let v3 = Term.VarMap.cardinal phi.term_eqs in
+    let v4 = Atom.Set.cardinal phi.atoms in
+    [v1; v2; v3; v4]
 end
 
 (** Instead of a single formula, distinguish what we have observed to be true (coming from
@@ -1982,3 +1974,9 @@ let subst_vars map phi =
   { known
   ; pruned
   ; both }
+
+let feature_vector phi =
+  let vs1 = Formula.feature_vector phi.known in
+  let v1 = Atom.Set.cardinal phi.pruned in
+  let vs2 = Formula.feature_vector phi.both in
+  vs1 @ [v1] @ vs2

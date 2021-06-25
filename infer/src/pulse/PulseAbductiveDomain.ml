@@ -99,7 +99,8 @@ type t =
 [@@deriving compare, equal, yojson_of]
 
 let pp f {post; pre; topl; path_condition; skipped_calls} =
-  F.fprintf f "@[<v>%a@;%a@;PRE=[%a]@;skipped_calls=%a@;Topl=%a@]" PathCondition.pp path_condition
+  F.fprintf f "@[<v>%a@;%a@;PRE=[%a]@;skipped_calls=%a@;Topl=%a@]" 
+    PathCondition.pp path_condition
     PostDomain.pp post PreDomain.pp pre SkippedCalls.pp skipped_calls PulseTopl.pp_state topl
 
 module PPKey = struct
@@ -925,3 +926,15 @@ let feature_vector astate =
   let v1 = diff_stack_vars astate in
   let v2 = skipped_calls astate in
   path_vs @ pre_vs @ post_vs @ [v1; v2]
+
+let feature_pp fmt lst =
+  F.pp_print_string fmt "[ ";
+  List.iter lst ~f:(fun v -> F.pp_print_int fmt v;F.pp_print_string fmt ", ") ;
+  F.pp_print_string fmt " ]"
+
+
+let pp f {post; pre; topl; path_condition; skipped_calls} =
+  F.fprintf f "@[FV:%a@;<v>%a@;%a@;PRE=[%a]@;skipped_calls=%a@;Topl=%a@]" 
+    feature_pp (feature_vector {post; pre; topl; path_condition; skipped_calls})
+    PathCondition.pp path_condition
+    PostDomain.pp post PreDomain.pp pre SkippedCalls.pp skipped_calls PulseTopl.pp_state topl
