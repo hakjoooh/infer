@@ -14,8 +14,12 @@ module type S = sig
   module CFG : ProcCfg.S
 
   (** abstract domain whose state we propagate *)
-  module Domain : AbstractDomain.S
+  (* module Domain : AbstractDomain.S *)
+  module Domain : sig
+    include AbstractDomain.S
 
+    val sjoin: CFG.Node.t -> t -> t -> t
+  end
   (** read-only extra state (results of previous analyses, globals, etc.) *)
   type analysis_data
 
@@ -54,7 +58,11 @@ end
 module type DisjReady = sig
   module CFG : ProcCfg.S
 
-  module Domain : AbstractDomain.NoJoin
+  module Domain : sig
+    include AbstractDomain.NoJoin
+
+    val sjoin : CFG.Node.t -> t -> t -> t
+  end
 
   type analysis_data
 

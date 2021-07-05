@@ -223,6 +223,8 @@ let is_cell_read_only ~edges_pre_opt ~cell_post:(_, attrs_post) =
 
 let materialize_pre_for_captured_vars callee_proc_name call_location pre_post
     ~captured_vars_with_actuals call_state =
+  L.d_printfln "materialize_pre_for_captured_vars %a"
+    PathCondition.pp call_state.astate.path_condition;
   List.fold_result captured_vars_with_actuals ~init:call_state
     ~f:(fun call_state (formal, actual) ->
       materialize_pre_from_actual callee_proc_name call_location
@@ -232,6 +234,8 @@ let materialize_pre_for_captured_vars callee_proc_name call_location pre_post
 
 let materialize_pre_for_parameters callee_proc_name call_location pre_post ~formals ~actuals
     call_state =
+  L.d_printfln "materialize_pre_for_parameters %a"
+    PathCondition.pp call_state.astate.path_condition;
   (* For each [(formal, actual)] pair, resolve them to addresses in their respective states then
      call [materialize_pre_from] on them.  Give up if calling the function introduces aliasing.
   *)
@@ -248,6 +252,8 @@ let materialize_pre_for_parameters callee_proc_name call_location pre_post ~form
 
 
 let materialize_pre_for_globals callee_proc_name call_location pre_post call_state =
+  L.d_printfln "materialize_pre_for_globals %a"
+    PathCondition.pp call_state.astate.path_condition;
   fold_globals_of_stack call_location (pre_post.AbductiveDomain.pre :> BaseDomain.t).stack
     call_state ~f:(fun _var ~stack_value:(addr_pre, _) ~addr_hist_caller call_state ->
       materialize_pre_from_address callee_proc_name call_location
@@ -267,6 +273,7 @@ let conjoin_callee_arith pre_post call_state =
     pre_post.AbductiveDomain.path_condition
     (AddressMap.pp ~pp_value:(fun fmt (addr, _) -> AbstractValue.pp fmt addr))
     call_state.subst ;
+  (* TODO: call_state.astate.path_condition가 바뀌어있음 *)
   let subst, path_condition, new_eqs =
     PathCondition.and_callee call_state.subst call_state.astate.path_condition
       ~callee:pre_post.AbductiveDomain.path_condition
@@ -501,11 +508,16 @@ let record_post_for_return callee_proc_name call_loc pre_post call_state =
     | None ->
         (call_state, None)
     | Some (return_callee, _) ->
+        L.d_printfln "ysko Return var: %a" Var.pp return_var;
+        L.d_printfln "ysko return addr: %a" AbstractValue.pp addr_return;
+        L.d_printfln "ysko return callee: %a" AbstractValue.pp return_callee;
         let return_caller_addr_hist =
           match AddressMap.find_opt return_callee call_state.subst with
           | Some return_caller_hist ->
+              L.d_printfln "ysko return callee from caller_hist: %a" AbstractValue.pp (fst return_caller_hist);
               return_caller_hist
           | None ->
+              L.d_printfln "ysko new return callee";
               ( AbstractValue.mk_fresh ()
               , [ (* this could maybe include an event like "returned here" *) ] )
         in
@@ -588,16 +600,70 @@ let apply_post callee_proc_name call_location pre_post ~captured_vars_with_actua
   let r =
     let call_state, return_caller =
       apply_post_for_parameters callee_proc_name call_location pre_post ~formals ~actuals call_state
+      |> (fun a ->
+          if Config.debug_mode then
+            begin
+              L.d_printfln "ysko Subst_1: ";
+              AbstractValue.Map.iter (fun a (b, _) ->
+                  L.d_printfln " %a -> %a" AbstractValue.pp a AbstractValue.pp b;) a.subst;
+            end;
+          a)
       |> apply_post_for_captured_vars callee_proc_name call_location pre_post
            ~captured_vars_with_actuals
+      |> (fun a ->
+          if Config.debug_mode then
+            begin
+              L.d_printfln "ysko Subst_2: ";
+              AbstractValue.Map.iter (fun a (b, _) ->
+                  L.d_printfln " %a -> %a" AbstractValue.pp a AbstractValue.pp b;) a.subst;
+            end;
+          a)
       |> apply_post_for_globals callee_proc_name call_location pre_post
+      |> (fun a ->
+          if Config.debug_mode then
+            begin
+              L.d_printfln "ysko Subst_3: ";
+              AbstractValue.Map.iter (fun a (b, _) ->
+                  L.d_printfln " %a -> %a" AbstractValue.pp a AbstractValue.pp b;) a.subst;
+            end;
+          a)
       |> record_post_for_return callee_proc_name call_location pre_post
+      |> (fun (a,b) ->
+          if Config.debug_mode then
+            begin
+              L.d_printfln "ysko Subst_4: ";
+              AbstractValue.Map.iter (fun a (b, _) ->
+                  L.d_printfln " %a -> %a" AbstractValue.pp a AbstractValue.pp b;) a.subst;
+            end;
+          (a,b))
     in
     let+ call_state =
       record_post_remaining_attributes callee_proc_name call_location pre_post call_state
+      |> (fun a ->
+          if Config.debug_mode then
+            begin
+              L.d_printfln "ysko Subst_5: ";
+              AbstractValue.Map.iter (fun a (b, _) ->
+                  L.d_printfln " %a -> %a" AbstractValue.pp a AbstractValue.pp b;) a.subst;
+            end;
+          a)
       |> record_skipped_calls callee_proc_name call_location pre_post
+      |> (fun a ->
+          if Config.debug_mode then
+            begin
+              L.d_printfln "ysko Subst_6: ";
+              AbstractValue.Map.iter (fun a (b, _) ->
+                  L.d_printfln " %a -> %a" AbstractValue.pp a AbstractValue.pp b;) a.subst;
+            end;
+          a)
       |> conjoin_callee_arith pre_post
     in
+    if Config.debug_mode then
+      begin
+        L.d_printfln "ysko Subst_6: ";
+        AbstractValue.Map.iter (fun a (b, _) ->
+            L.d_printfln " %a -> %a" AbstractValue.pp a AbstractValue.pp b;) call_state.subst;
+      end;
     (call_state, return_caller)
   in
   PerfEvent.(log (fun logger -> log_end_event logger ())) ;
@@ -699,6 +765,7 @@ let apply_prepost ~is_isl_error_prepost callee_proc_name call_location ~callee_p
     ~captured_vars_with_actuals ~formals ~actuals astate =
   L.d_printfln "Applying pre/post for %a(%a):@\n%a" Procname.pp callee_proc_name
     (Pp.seq ~sep:"," Var.pp) formals AbductiveDomain.pp pre_post ;
+  L.d_printfln "ysko Caller check: %a" AbductiveDomain.pp astate ;
   let empty_call_state =
     { astate
     ; subst= AddressMap.empty

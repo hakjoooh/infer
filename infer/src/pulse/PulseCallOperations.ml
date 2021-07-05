@@ -93,6 +93,16 @@ let apply_callee tenv ~caller_proc_desc callee_pname call_loc callee_exec_state 
     | (Sat (Error _) | Unsat) as path_result ->
         path_result
     | Sat (Ok (post, return_val_opt, subst)) ->
+        if Config.debug_mode then
+          begin
+            L.d_printfln "ysko Caller: %a" AbductiveDomain.pp astate;
+            L.d_printfln "ysko Callee desc: %a" Procname.pp callee_pname;
+            L.d_printfln "ysko Callee: %a" AbductiveDomain.pp callee_prepost;
+            L.d_printfln "ysko Post: %a" AbductiveDomain.pp post;
+            L.d_printfln "ysko Subst: ";
+            AbstractValue.Map.iter (fun a (b, _) ->
+                L.d_printfln " %a -> %a" AbstractValue.pp a AbstractValue.pp b;) subst;
+          end;
         let event = ValueHistory.Call {f= Call callee_pname; location= call_loc; in_call= []} in
         let post =
           match return_val_opt with
@@ -226,6 +236,7 @@ let call_aux tenv caller_proc_desc call_loc callee_pname ret actuals callee_proc
       else
         (* apply all pre/post specs *)
         match
+          L.d_printfln "ysko callee desc: %a" Procdesc.pp_signature callee_proc_desc;
           apply_callee tenv ~caller_proc_desc callee_pname call_loc callee_exec_state
             ~captured_vars_with_actuals ~formals ~actuals ~ret astate
         with
@@ -235,6 +246,8 @@ let call_aux tenv caller_proc_desc call_loc callee_pname ret actuals callee_proc
         | Sat post ->
             (* transition: callee summary -> instantiated result *)
             Result.iter post ~f:(fun pstate ->
+                if Config.debug_mode then
+                  L.d_printfln "ysko Result: %a" ExecutionDomain.pp pstate;
                 PulseOperations.transition None None callee_exec_state pstate);
             post :: posts )
 

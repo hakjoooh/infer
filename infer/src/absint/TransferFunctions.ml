@@ -42,7 +42,11 @@ end
 module type DisjReady = sig
   module CFG : ProcCfg.S
 
-  module Domain : AbstractDomain.NoJoin
+  module Domain : sig
+    include AbstractDomain.NoJoin
+
+    val sjoin: CFG.Node.t -> t -> t -> t
+  end
 
   type analysis_data
 

@@ -395,7 +395,7 @@ struct
           List.length post_disjuncts >= n
         in
         (* TODO for ML by ysko.: It skips executing disjunctions when it reaches the limit. *)
-        if should_skip then (
+        if should_skip && (Option.is_none Config.pulse_join_select) then (
           L.d_printfln "@[<v2>Reached max disjuncts limit, skipping disjunct #%d@;@]" i ;
           post_disjuncts )
         else (

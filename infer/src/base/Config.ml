@@ -3306,10 +3306,20 @@ and pulse_join_select =
       Py.initialize ();
       ignore (Py.Run.eval ~start:Py.File ("
 import pickle
+import numpy
 clf = pickle.load(open('"^name^"', 'rb'))
 decision = clf.decision_function
-def score(x):
-    return decision(x)
+def new_dec(x):
+    y = decision(x)
+    for idx, val in enumerate(x):
+        if val in clf.recall:
+            y[idx] = 20
+    return y
+
+if hasattr(clf,'recall'):
+    score = new_dec
+else:
+    score = decision      
 "));
       let fn_score = Py.Callable.to_function (Py.Run.eval "score") in
       Some(fn_score)
