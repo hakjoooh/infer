@@ -25,6 +25,27 @@ module type SIL = sig
   include S with type instr := Sil.instr
 end
 
+module type SML = sig
+  module CFG : ProcCfg.S
+
+  module Domain : sig
+    include AbstractDomain.S
+    val sjoin : CFG.Node.t -> t -> t -> t
+  end
+
+  type analysis_data
+
+  type instr
+
+  val exec_instr : Domain.t -> analysis_data -> CFG.Node.t -> instr -> Domain.t
+
+  val pp_session_name : CFG.Node.t -> Format.formatter -> unit
+end
+
+module type SILML = sig
+  include SML with type instr := Sil.instr
+end
+
 module type HIL = sig
   include S with type instr := HilInstr.t
 end
@@ -42,11 +63,7 @@ end
 module type DisjReady = sig
   module CFG : ProcCfg.S
 
-  module Domain : sig
-    include AbstractDomain.NoJoin
-
-    val sjoin: CFG.Node.t -> t -> t -> t
-  end
+  module Domain : AbstractDomain.NoJoin
 
   type analysis_data
 

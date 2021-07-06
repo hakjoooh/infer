@@ -14,12 +14,8 @@ module type S = sig
   module CFG : ProcCfg.S
 
   (** abstract domain whose state we propagate *)
-  (* module Domain : AbstractDomain.S *)
-  module Domain : sig
-    include AbstractDomain.S
+  module Domain : AbstractDomain.S
 
-    val sjoin: CFG.Node.t -> t -> t -> t
-  end
   (** read-only extra state (results of previous analyses, globals, etc.) *)
   type analysis_data
 
@@ -41,6 +37,36 @@ module type SIL = sig
   include S with type instr := Sil.instr
 end
 
+module type SML = sig
+  module CFG : ProcCfg.S
+
+  (** abstract domain whose state we propagate *)
+  module Domain : sig
+    include AbstractDomain.S
+    val sjoin : CFG.Node.t -> t -> t -> t
+  end
+
+  (** read-only extra state (results of previous analyses, globals, etc.) *)
+  type analysis_data
+
+  (** type of the instructions the transfer functions operate on *)
+  type instr
+
+  val exec_instr : Domain.t -> analysis_data -> CFG.Node.t -> instr -> Domain.t
+  (** [exec_instr astate proc_data node instr] should usually return [astate'] such that
+      [{astate} instr {astate'}] is a valid Hoare triple. In other words, [exec_instr] defines how
+      executing an instruction from a given abstract state changes that state into a new one. This
+      is usually called the {i transfer function} in Abstract Interpretation terms. [node] is the
+      node containing the current instruction. *)
+
+  val pp_session_name : CFG.Node.t -> Format.formatter -> unit
+  (** print session name for HTML debug *)
+end
+
+module type SILML = sig
+  include SML with type instr := Sil.instr
+end
+
 module type HIL = sig
   include S with type instr := HilInstr.t
 end
@@ -58,11 +84,7 @@ end
 module type DisjReady = sig
   module CFG : ProcCfg.S
 
-  module Domain : sig
-    include AbstractDomain.NoJoin
-
-    val sjoin : CFG.Node.t -> t -> t -> t
-  end
+  module Domain : AbstractDomain.NoJoin
 
   type analysis_data
 
@@ -75,10 +97,7 @@ module type DisjReadyWithML = sig
   include DisjReady
   module CFG : ProcCfg.S
 
-  (* module Domain : AbstractDomain.NoJoinForML *)
-  module Domain : sig
-    include AbstractDomain.NoJoinForML
-  end
+  module Domain : AbstractDomain.NoJoinForML
 
   type analysis_data
 

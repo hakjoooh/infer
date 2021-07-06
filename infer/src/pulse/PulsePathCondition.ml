@@ -320,12 +320,6 @@ let and_callee subst phi ~callee:phi_callee =
           L.d_printfln "contradiction found by concrete intervals" ;
           (subst, false_, [])
       | subst, citvs' -> (
-          (* TODO: phi.formula의 내용이 바뀌어있다. *)
-          L.d_printfln "and_formula_callee subst[%a]; formula[%a]; callee[%a]"
-            (AbstractValue.Map.pp ~pp_value:(fun fmt (addr, _) -> AbstractValue.pp fmt addr))
-            subst
-            Formula.pp phi.formula (* ysko: TODO *)
-            Formula.pp phi_callee.formula;
         match and_formula_callee subst phi.formula ~callee:phi_callee.formula with
         | Unsat ->
             L.d_printfln "contradiction found by formulas" ;
