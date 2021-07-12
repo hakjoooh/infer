@@ -336,15 +336,39 @@ let num_of_invalids = count Attributes.get_invalid
 let num_of_allocated = count Attributes.get_allocation
 let num_of_stack_var_addresses = count Attributes.get_address_of_stack_variable
 
-(* type t = {heap: Memory.t; stack: Stack.t; attrs: AddressAttributes.t} *)
 let feature_vector t =
+  (* heap *)
   let v1 = Memory.cardinal t.heap in
-  let v2 = num_of_must_be_valid t in
-  let v3 = num_of_written_to t in
-  let v4 = num_of_must_be_initialized t in
-  let v5 = num_of_invalids t in
-  let v6 = num_of_allocated t in
-  let v7 = Stack.cardinal t.stack in
-  let v8 = num_of_stack_var_addresses t in
-  [v1; v2; v3; v4; v5; v6; v7; v8]
+  let cnt f =
+    Memory.fold
+      (fun _ (v: Memory.Edges.t) i -> i + (Memory.Edges.fold v ~init:0 ~f:(fun i (s,_) -> i + (f s))))
+      t.heap
+      0
+  in
+  let v2 = cnt (fun x -> match x with
+      | HilExp.Access.FieldAccess _ -> 1
+      | _ -> 0)
+  in
+  let v3 = cnt (fun x -> match x with
+      | HilExp.Access.ArrayAccess _ -> 1
+      | _ -> 0)
+  in
+  let v4 = cnt (fun x -> match x with
+      | HilExp.Access.TakeAddress -> 1
+      | _ -> 0)
+  in
+  let v5 = cnt (fun x -> match x with
+      | HilExp.Access.Dereference -> 1
+      | _ -> 0)
+  in
+  (* attribute *)
+  let v6 = num_of_must_be_valid t in
+  let v7 = num_of_written_to t in
+  let v8 = num_of_must_be_initialized t in
+  let v9 = num_of_invalids t in
+  let v10 = num_of_allocated t in
+  (* stack *)
+  let v11 = Stack.cardinal t.stack in
+  let v12 = num_of_stack_var_addresses t in
+  [v1; v2; v3; v4; v5; v6; v7; v8; v9; v10; v11; v12]
 

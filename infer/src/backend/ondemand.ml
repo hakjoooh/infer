@@ -45,9 +45,19 @@ let current_taskbar_status : (Mtime.t * string) option ref = ref None
 
 let is_active, add_active, remove_active, clear_actives =
   let currently_analyzed = ref Procname.Set.empty in
-  let is_active proc_name = Procname.Set.mem proc_name !currently_analyzed
-  and add_active proc_name = currently_analyzed := Procname.Set.add proc_name !currently_analyzed
+  let is_active proc_name = 
+    let s = Procname.Set.mem proc_name !currently_analyzed in
+    L.debug Analysis Quiet "* ysko is_active: %a %b@\n" Procname.pp proc_name s;
+    Procname.Set.iter (fun x -> 
+        L.debug Analysis Quiet "- %a@\n" Procname.pp x) !currently_analyzed;
+    s
+  and add_active proc_name = 
+    L.d_printfln "* ysko add_active: %a@\n" Procname.pp proc_name;
+    L.debug Analysis Quiet "* ysko add_active: %a@\n" Procname.pp proc_name;
+    currently_analyzed := Procname.Set.add proc_name !currently_analyzed
   and remove_active proc_name =
+    L.d_printfln "* ysko remove_active: %a@\n" Procname.pp proc_name;
+    L.debug Analysis Quiet "* ysko remove_active: %a@\n" Procname.pp proc_name;
     currently_analyzed := Procname.Set.remove proc_name !currently_analyzed
   and clear_actives () = currently_analyzed := Procname.Set.empty in
   (is_active, add_active, remove_active, clear_actives)

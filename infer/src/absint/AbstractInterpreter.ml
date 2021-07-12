@@ -249,79 +249,35 @@ struct
         match l1 with hd :: tl when n > 0 -> list_rev_append tl (hd :: l2) (n - 1) | _ -> l2
       in
       fun lhs rhs ->
-        (** original join operation *)
         if phys_equal lhs rhs then lhs
         else
           let (`UnderApproximateAfter n) = DConfig.join_policy in
           let lhs_length = List.length lhs in
           if lhs_length >= n then lhs else list_rev_append rhs lhs (n - lhs_length)
 
-
-    (** Disabled: replay mode *)
-    (*
-    let select_join : t -> t -> t =
-      let rec list_rev_append l1 l2 n =
-        match l1 with hd :: tl when n > 0 -> list_rev_append tl (hd :: l2) (n - 1) | _ -> l2
-      in
-      fun lhs rhs ->
-      if phys_equal lhs rhs then lhs
-      else
-        let (`UnderApproximateAfter n) = DConfig.join_policy in
-        let lhs_length = List.length lhs in
-        let result = 
-          if lhs_length >= n then lhs else list_rev_append rhs lhs (n - lhs_length)
-        in
-        (** select by e-selector *)
-        let result_n = 
-          List.filter result ~f:T.is_in_oracle
-        in
-        ( if Config.write_html then
-            let n1 = List.length result in
-            let n2 = List.length result_n in
-            let n = n1 - n2 in
-            let diff = List.filter result ~f:(fun x -> not (List.mem result_n x ~equal:T.Domain.similar)) in
-            L.d_printfln "@]@\n@[Discards %d disjunct%s by selection@]" n (if Int.equal n 1 then "" else "s");
-            List.iter diff ~f:(fun x -> L.d_printfln "@]@\n@[Discarded@]@\n%a" T.Domain.pp x)
-        ) ;
-        result_n
-       *)
-
     let feature_pp fmt lst =
       F.pp_print_string fmt "[ ";
       List.iter lst ~f:(fun v -> F.pp_print_int fmt v;F.pp_print_string fmt ", ") ;
       F.pp_print_string fmt " ]"
-    let top_k_join : (Pytypes.pyobject array -> Pytypes.pyobject) -> CFG.Node.t -> t -> t -> t =
-      (** TODO: naive top-k selecting algorithm. *)
-      (* let rec logr list score =
-       *   match list, score with
-       *   | ([], _) | (_, []) -> ()
-       *   | (x::xs, y::ys) ->
-       *      (\* log *\)
-       *      L.d_printfln "state: (%f)@\n%a" y T.Domain.pp x;
-       *      logr xs ys
-       * in
-       * let log list score =
-       *   L.d_printfln "* Score table";
-       *   logr list score
-       * in *)
-      let rec selected_log list k =
+
+    let top_k_join : (Pytypes.pyobject array -> Pytypes.pyobject) -> (Pytypes.pyobject array -> Pytypes.pyobject) -> CFG.Node.t -> t -> t -> t =
+      let tfst (v,_,_) = v in
+      let tsnd (_,v,_) = v in
+      let ttrd (_,_,v) = v in
+      let rec selected_log (list: (int list * float * float) list) k =
         if k <= 0 then
           match list with
           | [] -> ()
           | hd::tl ->
-              L.d_printfln "* Droped: %a" feature_pp hd;
+              L.d_printfln "* Droped(%f <- %f): %a" (tsnd hd) (ttrd hd) feature_pp (tfst hd);
               selected_log tl k
         else
           match list with
           | [] -> ()
           | hd::tl ->
-              L.d_printfln "* Selected %d: %a" k feature_pp hd;
+              L.d_printfln "* Selected(%f <- %f) %d: %a" (tsnd hd) (ttrd hd) k feature_pp (tfst hd);
               selected_log tl (k - 1)
       in
-      (* let log_param list =
-       *   L.d_printfln "* join parameters";
-       *   List.iter ~f:(fun x -> L.d_printfln "%f" x) list
-       * in *)
       let rec partition fn l1 l2 =
         match (l1, l2) with
         | ([], _) | (_, []) -> ([], [], [], [])
@@ -349,19 +305,26 @@ struct
       in
       let select_top_k =
         if Config.debug_mode then
-          fun list scores_list scores k ->
+          fun list (vector_list: int list list) (scores: float list) (scores_old: float list) k ->
             let sorted = qsort list scores in
-            let sorted_list = qsort scores_list scores in
+            let rec zip a b c =
+              match a, b, c with
+              | [], [], [] -> []
+              | h1::t1, h2::t2, h3::t3 -> (h1,h2,h3)::(zip t1 t2 t3)
+              | _ -> raise Exit
+            in            
+            let v = zip vector_list scores_old scores in
+            let sorted_list = qsort v scores in
             selected_log sorted_list k;
             select sorted k
         else
-          fun list _ scores k ->
+          fun list _ scores _ k ->
             let sorted = qsort list scores in
             select sorted k
       in
       (** until here ***)
       let (`UnderApproximateAfter n) = DConfig.join_policy in
-      fun fn_score node lhs rhs ->
+      fun fn_score fn_score_old node lhs rhs ->
         if phys_equal lhs rhs then lhs
         else
         let list = lhs @ rhs in
@@ -372,18 +335,20 @@ struct
           let int_list = List.map ~f:(fun vs ->
               node_features @ T.Domain.feature_vector vs) list
           in
-          let scores_list = List.map ~f:(Py.List.of_list_map Py.Int.of_int) int_list in
-          let scores_list = fn_score [| Py.List.of_list scores_list |] in
+          let scores_listi = List.map ~f:(Py.List.of_list_map Py.Int.of_int) int_list in
+          let scores_list = fn_score [| Py.List.of_list scores_listi |] in
+          let scores_list_old = fn_score_old [| Py.List.of_list scores_listi |] in
           let scores_list = Py.List.to_list_map Py.Float.to_float scores_list in
-          select_top_k list int_list scores_list n
+          let scores_list_old = Py.List.to_list_map Py.Float.to_float scores_list_old in
+          select_top_k list int_list scores_list scores_list_old n
 
     (** deprecated in ML mode. *)
     let join : t -> t -> t = fun _ _ -> raise Exit
 
     let sjoin =
       match Config.pulse_join_select with
-      | Some(fn) -> 
-          let top_k_join = top_k_join fn in
+      | Some(fn, fn_old) -> 
+          let top_k_join = top_k_join fn fn_old in
           fun node -> top_k_join node
       | None ->
           fun _node -> orig_join

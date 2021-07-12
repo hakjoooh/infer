@@ -515,7 +515,7 @@ val pulse_nullsafe_report_npe : bool
 
 val pulse_train_mode : bool
 
-val pulse_join_select : (Pytypes.pyobject array -> Pytypes.pyobject) option
+val pulse_join_select : ((Pytypes.pyobject array -> Pytypes.pyobject) * (Pytypes.pyobject array -> Pytypes.pyobject)) option
 
 val pure_by_default : bool
 

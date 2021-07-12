@@ -3307,6 +3307,20 @@ and pulse_join_select =
       ignore (Py.Run.eval ~start:Py.File ("
 import pickle
 import numpy
+def random_val(x):
+    t = tuple(x)
+    if t in history:
+        return history[t]
+    else:
+        r = numpy.random.randn()
+        history[t] = r
+        return r
+
+history = {}
+class RandModel:
+    def decision_function(x):
+        return list(map(random_val, x))
+
 clf = pickle.load(open('"^name^"', 'rb'))
 decision = clf.decision_function
 def new_dec(x):
@@ -3318,11 +3332,14 @@ def new_dec(x):
 
 if hasattr(clf,'recall'):
     score = new_dec
+    old_score = decision
 else:
     score = decision      
+    old_score = decision
 "));
       let fn_score = Py.Callable.to_function (Py.Run.eval "score") in
-      Some(fn_score)
+      let fn_score_old = Py.Callable.to_function (Py.Run.eval "old_score") in
+      Some(fn_score, fn_score_old)
     end
   else
     L.(die UserError) "Wrong argument for --pulse-join-select: cannot find the ML model: '%s'" name
